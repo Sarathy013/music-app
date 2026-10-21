@@ -1,0 +1,368 @@
+﻿import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Modal, TextInput,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
+import { playlistAPI, favoritesAPI, historyAPI } from '../../services/api';
+import TrackCard from '../../components/TrackCard';
+import EmptyState from '../../components/EmptyState';
+import { usePlayer } from '../../store/PlayerContext';
+import { getDownloadedTracks } from '../../utils/downloader';
+import { showAlert } from '../../utils/alert';
+
+const TABS = ['playlists', 'favorites', 'downloads', 'history'];
+
+export default function LibraryScreen() {
+  const [activeTab, setActiveTab] = useState('playlists');
+  const [playlists, setPlaylists] = useState([]);
+  const [favorites, setFavorites] = useState([]);
+  const [downloads, setDownloads] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showNewPlaylist, setShowNewPlaylist] = useState(false);
+  const [newName, setNewName] = useState('');
+  const { loadAndPlay } = usePlayer();
+  const router = useRouter();
+
+  const fetchAll = useCallback(async () => {
+    try {
+      const [pl, fav, hist, down] = await Promise.allSettled([
+        playlistAPI.getAll(),
+        favoritesAPI.getAll(),
+        historyAPI.getAll(30),
+        getDownloadedTracks(),
+      ]);
+      if (pl.status === 'fulfilled') setPlaylists(pl.value?.playlists || []);
+      if (fav.status === 'fulfilled') setFavorites(fav.value?.favorites || []);
+      if (hist.status === 'fulfilled') setHistory(hist.value?.history || []);
+      if (down.status === 'fulfilled') setDownloads(down.value || []);
+    } catch {}
+    finally { setLoading(false); setRefreshing(false); }
+  }, []);
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const createPlaylist = async () => {
+    if (!newName.trim()) return;
+    try {
+      await playlistAPI.create({ name: newName.trim() });
+      setNewName('');
+      setShowNewPlaylist(false);
+      fetchAll();
+    } catch (e) {
+      showAlert('Error', e.message);
+    }
+  };
+
+  const deletePlaylist = (id) => {
+    showAlert('Delete Playlist', 'Are you sure you want to delete this playlist?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          await playlistAPI.delete(id);
+          fetchAll();
+        },
+      },
+    ]);
+  };
+
+  const renderPlaylist = ({ item }) => (
+    <TouchableOpacity
+      style={styles.listRow}
+      onPress={() => router.push(`/playlist/${item._id}`)}
+    >
+      <View style={styles.playlistIcon}>
+        <Ionicons name="musical-notes" size={24} color={Colors.primaryLight} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowTitle}>{item.name}</Text>
+        <Text style={styles.rowSub}>{item.tracks?.length || 0} tracks</Text>
+      </View>
+      <TouchableOpacity onPress={() => deletePlaylist(item._id)}>
+        <Ionicons name="trash-outline" size={18} color={Colors.textMuted} />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  const renderFavorite = ({ item, index }) => {
+    const formatted = { ...item, id: item.trackId || item.id };
+    const queue = favorites.map((f) => ({ ...f, id: f.trackId || f.id }));
+    return <TrackCard track={formatted} queue={queue} index={index} />;
+  };
+
+  const renderDownload = ({ item, index }) => {
+    const stream = item.localUri || item.streamUrl;
+    const formatted = { ...item, streamUrl: stream };
+    return (
+      <TrackCard
+        track={formatted}
+        queue={downloads}
+        index={index}
+        onPress={() => loadAndPlay(formatted, downloads, index)}
+      />
+    );
+  };
+
+  const renderHistory = ({ item }) => {
+    const formatted = { ...item, id: item.trackId || item.id };
+    return (
+      <TrackCard
+        track={formatted}
+        onPress={(t) => loadAndPlay(t, [t], 0)}
+      />
+    );
+  };
+
+  const data =
+    activeTab === 'playlists'
+      ? playlists
+      : activeTab === 'favorites'
+      ? favorites
+      : activeTab === 'downloads'
+      ? downloads
+      : history;
+
+  const renderItem =
+    activeTab === 'playlists'
+      ? renderPlaylist
+      : activeTab === 'favorites'
+      ? renderFavorite
+      : activeTab === 'downloads'
+      ? renderDownload
+      : renderHistory;
+
+  return (
+    <View style={styles.screen}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Library</Text>
+        {activeTab === 'playlists' && (
+          <TouchableOpacity onPress={() => setShowNewPlaylist(true)}>
+            <Ionicons name="add-circle" size={30} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
+        {activeTab === 'history' && history.length > 0 && (
+          <TouchableOpacity onPress={async () => { await historyAPI.clear(); fetchAll(); }}>
+            <Ionicons name="trash-outline" size={22} color={Colors.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        {TABS.map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.tab, activeTab === tab && styles.tabActive]}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
+              {tab === 'playlists'
+                ? 'Playlists'
+                : tab === 'favorites'
+                ? '❤️ Liked'
+                : tab === 'downloads'
+                ? '⬇️ Offline'
+                : '🕓 History'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* List */}
+      <FlatList
+        data={data}
+        keyExtractor={(item) => String(item._id || item.id || item.trackId)}
+        renderItem={renderItem}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={Colors.primary} />}
+        contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
+        ListEmptyComponent={
+          !loading && (
+            <EmptyState
+              icon={
+                activeTab === 'playlists'
+                  ? 'musical-notes'
+                  : activeTab === 'favorites'
+                  ? 'heart'
+                  : activeTab === 'downloads'
+                  ? 'cloud-download-outline'
+                  : 'time'
+              }
+              title={
+                activeTab === 'playlists'
+                  ? 'No playlists yet'
+                  : activeTab === 'favorites'
+                  ? 'No liked tracks'
+                  : activeTab === 'downloads'
+                  ? 'No downloaded tracks'
+                  : 'No history yet'
+              }
+              subtitle={
+                activeTab === 'playlists'
+                  ? 'Tap + to create your first playlist.'
+                  : activeTab === 'downloads'
+                  ? 'Tap the download button on any song to save it for offline listening.'
+                  : 'Start listening to build your library.'
+              }
+              actionLabel={activeTab === 'playlists' ? 'Create Playlist' : undefined}
+              onAction={activeTab === 'playlists' ? () => setShowNewPlaylist(true) : undefined}
+            />
+          )
+        }
+        showsVerticalScrollIndicator={false}
+      />
+
+      {/* New Playlist Modal */}
+      <Modal visible={showNewPlaylist} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>New Playlist</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Playlist name"
+              placeholderTextColor={Colors.textMuted}
+              value={newName}
+              onChangeText={setNewName}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowNewPlaylist(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={createPlaylist}>
+                <Text style={styles.confirmText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.bg },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.base,
+    paddingTop: 56,
+    paddingBottom: Spacing.sm,
+  },
+  headerTitle: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.xxl,
+    color: Colors.textPrimary,
+  },
+  tabs: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.base,
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  tab: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.bgCard,
+  },
+  tabActive: {
+    backgroundColor: Colors.primary,
+  },
+  tabLabel: {
+    fontFamily: Typography.fontFamily.medium,
+    fontSize: Typography.fontSize.xs,
+    color: Colors.textSecondary,
+  },
+  tabLabelActive: {
+    color: Colors.white,
+    fontFamily: Typography.fontFamily.semibold,
+  },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    gap: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  playlistIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowTitle: {
+    fontFamily: Typography.fontFamily.medium,
+    fontSize: Typography.fontSize.base,
+    color: Colors.textPrimary,
+  },
+  rowSub: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.xs,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+  },
+  modalBox: {
+    width: '100%',
+    backgroundColor: Colors.bgElevated,
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalTitle: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.lg,
+    color: Colors.textPrimary,
+    marginBottom: Spacing.md,
+  },
+  modalInput: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    color: Colors.textPrimary,
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.base,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.lg,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.md,
+  },
+  cancelBtn: { paddingVertical: 10, paddingHorizontal: 16 },
+  cancelText: {
+    fontFamily: Typography.fontFamily.medium,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  confirmBtn: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: Radius.full,
+  },
+  confirmText: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.white,
+  },
+});
