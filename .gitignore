@@ -4,14 +4,19 @@ node_modules/
 
 # Expo & Mobile
 .expo/
-**/android/
-**/ios/
 *.orig.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
+
+# Android build outputs & cache
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/.cxx/
+**/ios/
 
 # Environment Variables
 .env
