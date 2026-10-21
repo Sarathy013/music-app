@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -18,7 +21,9 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -32,17 +37,50 @@ jobs:
           cd mobile
           npm ci
 
+      - name: Pre-bundle JavaScript & Assets
+        run: |
+          cd mobile
+          mkdir -p android/app/src/main/assets
+          npx expo export:embed --entry-file index.js --platform android --dev false --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
+
       - name: Make Gradle executable
         run: chmod +x mobile/android/gradlew
 
-      - name: Build Release APK
+      - name: Build Standalone APK
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m"
         run: |
           cd mobile/android
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Locate and Rename APK
+        run: |
+          mkdir -p build-output
+          find mobile/android/app/build/outputs/apk -name "*.apk" -exec cp {} build-output/VibeStream.apk \;
+          ls -la build-output/
 
       - name: Upload Standalone APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: VibeStream-Music-App
-          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          path: build-output/VibeStream.apk
           if-no-files-found: error
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
+        with:
+          tag_name: v2.0.0-apk
+          name: "VibeStream v2.0.0 Standalone APK"
+          body: |
+            ### 🎵 VibeStream Standalone Android APK
+            
+            Download and install `VibeStream.apk` directly on any Android phone (no Expo Go needed)!
+            
+            - **All Music Streaming**: JioSaavn 320kbps + YouTube Music + Jamendo
+            - **Background Audio**: Lock-screen media controls & persistent playback
+            - **Synced Lyrics**: Spotify-style animated lyric tracking
+            - **Offline Downloads**: Save tracks to your phone
+          files: build-output/VibeStream.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
