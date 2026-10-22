@@ -40,27 +40,51 @@ jobs:
           mkdir -p android/app/src/main/assets
           npx expo export:embed --entry-file index.js --platform android --dev false --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
 
-      - name: Make Gradle executable
-        run: chmod +x mobile/android/gradlew
+      - name: Configure Android SDK & Licenses
+        run: |
+          echo "sdk.dir=/usr/local/lib/android/sdk" > mobile/android/local.properties
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          chmod +x mobile/android/gradlew
 
       - name: Build Standalone APK
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m"
+          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
+          set -o pipefail
           cd mobile/android
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ../../gradle.log
 
       - name: Dump Gradle Log on Failure
-        if: failure()
+        if: always()
         run: |
-          echo "=== LAST 150 LINES OF GRADLE BUILD LOG ==="
-          tail -n 150 gradle.log
+          if [ -f gradle.log ]; then
+            echo "=== LAST 200 LINES OF GRADLE BUILD LOG ==="
+            tail -n 200 gradle.log
+          fi
+
+      - name: Upload Build Log Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle.log
+          if-no-files-found: ignore
 
       - name: Locate and Rename APK
         run: |
           mkdir -p build-output
-          find mobile/android/app/build/outputs/apk -name "*.apk" -exec cp {} build-output/VibeStream.apk \;
-          ls -la build-output/
+          echo "=== SEARCHING FOR GENERATED APK FILES ==="
+          find mobile/android/app/build/outputs/ -type f -name "*.apk" || true
+          APK_PATH=$(find mobile/android/app/build/outputs/ -type f -name "*.apk" | head -n 1)
+          if [ -n "$APK_PATH" ]; then
+            echo "Found APK at: $APK_PATH"
+            cp "$APK_PATH" build-output/VibeStream.apk
+            ls -la build-output/
+          else
+            echo "ERROR: No APK was found in build outputs!"
+            exit 1
+          fi
 
       - name: Upload Standalone APK Artifact
         uses: actions/upload-artifact@v4
