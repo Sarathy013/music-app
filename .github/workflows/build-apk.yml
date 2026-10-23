@@ -34,12 +34,6 @@ jobs:
           cd mobile
           npm ci
 
-      - name: Pre-bundle JavaScript & Assets
-        run: |
-          cd mobile
-          mkdir -p android/app/src/main/assets
-          npx expo export:embed --entry-file index.js --platform android --dev false --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
-
       - name: Configure Android SDK & Licenses
         run: |
           echo "sdk.dir=/usr/local/lib/android/sdk" > mobile/android/local.properties
@@ -55,12 +49,16 @@ jobs:
           cd mobile/android
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ../../gradle.log
 
-      - name: Dump Gradle Log on Failure
+      - name: Report Build Logs to Step Summary
         if: always()
         run: |
+          echo "### 📋 Gradle Build Log Summary" >> $GITHUB_STEP_SUMMARY
           if [ -f gradle.log ]; then
-            echo "=== LAST 200 LINES OF GRADLE BUILD LOG ==="
-            tail -n 200 gradle.log
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            tail -n 100 gradle.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No gradle.log found" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload Build Log Artifact
