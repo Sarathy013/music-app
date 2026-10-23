@@ -2,17 +2,20 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 const getBaseUrl = () => {
-  // Support explicit environment variable for production builds (EAS Build / Web)
-  const envUrl = process.env.EXPO_PUBLIC_API_URL || Constants.expoConfig?.extra?.apiUrl;
-  if (envUrl) {
-    return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
-  }
-
   if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined' && window.location && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    if (typeof window !== 'undefined' && window.location) {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:5000/api';
+      }
       return `${window.location.origin}/api`;
     }
     return 'http://localhost:5000/api';
+  }
+
+  // Support explicit environment variable for production builds (EAS Build / APK / Web)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL || Constants.expoConfig?.extra?.apiUrl;
+  if (envUrl && !envUrl.includes('loca.lt')) {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
   }
 
   const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost;
@@ -20,7 +23,7 @@ const getBaseUrl = () => {
     const ip = hostUri.split(':')[0];
     return `http://${ip}:5000/api`;
   }
-  return 'http://10.64.109.175:5000/api';
+  return 'http://10.140.136.175:5000/api';
 };
 
 // Base API URL — auto-detects host machine IP for Expo Go, localhost for web

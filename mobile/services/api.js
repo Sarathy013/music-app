@@ -37,7 +37,21 @@ const apiFetch = async (endpoint, options = {}) => {
       headers,
     });
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    let data;
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch {
+        if (!response.ok) {
+          throw new Error(`Server returned status ${response.status}. Please check backend.`);
+        }
+        data = { message: text };
+      }
+    }
 
     if (!response.ok) {
       throw new Error(data.message || `HTTP ${response.status}`);
@@ -45,8 +59,8 @@ const apiFetch = async (endpoint, options = {}) => {
 
     return data;
   } catch (error) {
-    if (error.message === 'Network request failed') {
-      throw new Error('No internet connection. Please check your network.');
+    if (error.message === 'Network request failed' || error.name === 'TypeError') {
+      throw new Error('Unable to connect to the server. Please verify the backend is running and reachable.');
     }
     throw error;
   }
