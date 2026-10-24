@@ -49,7 +49,7 @@ export const setCustomApiUrl = async (url) => {
 
 const apiFetch = async (endpoint, options = {}) => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
     const customUrl = await getCustomApiUrl();
@@ -101,7 +101,7 @@ const apiFetch = async (endpoint, options = {}) => {
       msg.includes('timed out') ||
       msg.includes('timeout')
     ) {
-      throw new Error(`Connection timed out (10s). The server at ${failedUrl} is unreachable.`);
+      throw new Error(`Connection timed out. The server at ${failedUrl} may be waking up. Please try again in a few seconds.`);
     }
     if (msg.includes('Network request failed') || msg.includes('Failed to connect') || error.name === 'TypeError') {
       throw new Error(`Cannot connect to server at ${failedUrl}.`);

@@ -34,8 +34,9 @@ jobs:
           cd mobile
           npm ci
 
-      - name: Configure Android SDK & Licenses
+      - name: Configure Environment & Android SDK
         run: |
+          echo "EXPO_PUBLIC_API_URL=https://vibestream-api-iet5.onrender.com/api" > mobile/.env
           echo "sdk.dir=/usr/local/lib/android/sdk" > mobile/android/local.properties
           yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
           chmod +x mobile/android/gradlew
@@ -44,6 +45,7 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m"
           ANDROID_HOME: /usr/local/lib/android/sdk
+          EXPO_PUBLIC_API_URL: "https://vibestream-api-iet5.onrender.com/api"
         run: |
           set -o pipefail
           cd mobile/android

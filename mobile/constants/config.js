@@ -23,7 +23,7 @@ const getBaseUrl = () => {
     const ip = hostUri.split(':')[0];
     return `http://${ip}:5000/api`;
   }
-  return 'http://10.140.136.175:5000/api';
+  return 'https://vibestream-api-iet5.onrender.com/api';
 };
 
 // Base API URL — auto-detects host machine IP for Expo Go, localhost for web
