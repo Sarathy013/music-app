@@ -23,6 +23,9 @@ export const removeToken = async () => {
 // ─── Fetch wrapper ────────────────────────────────────────────────────────────
 
 const apiFetch = async (endpoint, options = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
   try {
     const token = await getToken();
     const headers = {
@@ -35,7 +38,9 @@ const apiFetch = async (endpoint, options = {}) => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const contentType = response.headers.get('content-type') || '';
     let data;
@@ -59,8 +64,12 @@ const apiFetch = async (endpoint, options = {}) => {
 
     return data;
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Connection timed out. Cannot reach backend at ${API_BASE_URL}. Make sure your phone is connected to the same Wi-Fi.`);
+    }
     if (error.message === 'Network request failed' || error.name === 'TypeError') {
-      throw new Error('Unable to connect to the server. Please verify the backend is running and reachable.');
+      throw new Error(`Cannot connect to server at ${API_BASE_URL}. Ensure your phone is on the same Wi-Fi as your computer.`);
     }
     throw error;
   }

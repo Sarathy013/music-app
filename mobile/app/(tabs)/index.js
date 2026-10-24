@@ -439,11 +439,24 @@ export default function HomeScreen() {
             title={selectedLang === 'tamil' ? '🦁 Trending Tamil' : selectedLang === 'telugu' ? '⚡ Trending Telugu' : selectedLang === 'hindi' ? '🇮🇳 Trending Hindi' : selectedLang === 'english' ? '🌍 Trending English' : '🔥 Trending Worldwide'}
             onSeeAll={() => router.push({ pathname: '/see-more', params: { language: selectedLang } })}
           />
-          {loading
-            ? Array.from({ length: 5 }).map((_, i) => <TrackSkeleton key={i} />)
-            : trending.slice(0, 15).map((track, i) => (
-                <TrackCard key={`${track.id}-${i}`} track={track} queue={trending} index={i} />
-              ))}
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => <TrackSkeleton key={i} />)
+          ) : trending.length > 0 ? (
+            trending.slice(0, 15).map((track, i) => (
+              <TrackCard key={`${track.id}-${i}`} track={track} queue={trending} index={i} />
+            ))
+          ) : (
+            <View style={styles.emptyCard}>
+              <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
+              <Text style={styles.emptyTitle}>Unable to connect to server</Text>
+              <Text style={styles.emptySubtitle}>
+                Ensure your phone is on the same Wi-Fi as your computer, or pull down to refresh.
+              </Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={() => fetchHomeData(selectedLang)} activeOpacity={0.8}>
+                <Text style={styles.retryBtnText}>🔄 Tap to Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* 1. Tamil Latest Superhits Horizontal Section */}
@@ -1088,5 +1101,40 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.xs,
     color: Colors.textMuted,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+    marginHorizontal: Spacing.base,
+    backgroundColor: Colors.bgElevated,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontFamily: Typography.fontFamily.semiBold,
+    fontSize: Typography.fontSize.base,
+    color: Colors.textPrimary,
+  },
+  emptySubtitle: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.xs,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  retryBtn: {
+    marginTop: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: Radius.full,
+  },
+  retryBtnText: {
+    fontFamily: Typography.fontFamily.semiBold,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.white,
   },
 });
