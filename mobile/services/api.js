@@ -20,6 +20,31 @@ export const removeToken = async () => {
   await AsyncStorage.removeItem(STORAGE_KEYS.USER);
 };
 
+// ─── Custom Server URL helpers ────────────────────────────────────────────────
+
+export const getCustomApiUrl = async () => {
+  try {
+    return await AsyncStorage.getItem('vibestream_custom_api_url');
+  } catch {
+    return null;
+  }
+};
+
+export const setCustomApiUrl = async (url) => {
+  if (!url || !url.trim()) {
+    await AsyncStorage.removeItem('vibestream_custom_api_url');
+  } else {
+    let clean = url.trim();
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      clean = `http://${clean}`;
+    }
+    if (!clean.endsWith('/api')) {
+      clean = clean.replace(/\/+$/, '') + '/api';
+    }
+    await AsyncStorage.setItem('vibestream_custom_api_url', clean);
+  }
+};
+
 // ─── Fetch wrapper ────────────────────────────────────────────────────────────
 
 const apiFetch = async (endpoint, options = {}) => {
@@ -27,6 +52,8 @@ const apiFetch = async (endpoint, options = {}) => {
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
+    const customUrl = await getCustomApiUrl();
+    const activeBaseUrl = customUrl || API_BASE_URL;
     const token = await getToken();
     const headers = {
       'Content-Type': 'application/json',
@@ -35,7 +62,7 @@ const apiFetch = async (endpoint, options = {}) => {
       ...options.headers,
     };
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(`${activeBaseUrl}${endpoint}`, {
       ...options,
       headers,
       signal: controller.signal,
@@ -65,11 +92,19 @@ const apiFetch = async (endpoint, options = {}) => {
     return data;
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error(`Connection timed out. Cannot reach backend at ${API_BASE_URL}. Make sure your phone is connected to the same Wi-Fi.`);
+    const msg = error?.message || '';
+    const failedUrl = (await getCustomApiUrl()) || API_BASE_URL;
+    if (
+      error.name === 'AbortError' ||
+      msg.includes('canceled') ||
+      msg.includes('cancelled') ||
+      msg.includes('timed out') ||
+      msg.includes('timeout')
+    ) {
+      throw new Error(`Connection timed out (10s). The server at ${failedUrl} is unreachable.`);
     }
-    if (error.message === 'Network request failed' || error.name === 'TypeError') {
-      throw new Error(`Cannot connect to server at ${API_BASE_URL}. Ensure your phone is on the same Wi-Fi as your computer.`);
+    if (msg.includes('Network request failed') || msg.includes('Failed to connect') || error.name === 'TypeError') {
+      throw new Error(`Cannot connect to server at ${failedUrl}.`);
     }
     throw error;
   }
