@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../store/AuthContext';
 import { Colors, Typography } from '../constants/theme';
@@ -37,14 +37,13 @@ export default function IndexScreen() {
       end={{ x: 0.5, y: 1 }}
     >
       <Animated.View style={[styles.logoWrap, { opacity, transform: [{ scale }] }]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.accentGlow]}
-          style={styles.logoCircle}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.logoEmoji}>🎵</Text>
-        </LinearGradient>
+        <View style={styles.logoCircle}>
+          <Image
+            source={require('../assets/icon.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+        </View>
         <Text style={styles.appName}>FreeBeat</Text>
         <Text style={styles.tagline}>Listen. Discover. Enjoy.{'\n'}Completely Free.</Text>
       </Animated.View>
@@ -64,19 +63,24 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   logoCircle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 120,
+    height: 120,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.7,
     shadowRadius: 24,
     elevation: 20,
+    overflow: 'hidden',
   },
-  logoEmoji: {
-    fontSize: 50,
+  logoImage: {
+    width: 120,
+    height: 120,
   },
   appName: {
     fontFamily: Typography.fontFamily.bold,

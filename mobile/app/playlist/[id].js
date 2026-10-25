@@ -11,6 +11,7 @@ import TrackCard from '../../components/TrackCard';
 import EmptyState from '../../components/EmptyState';
 import { usePlayer } from '../../store/PlayerContext';
 import { showAlert } from '../../utils/alert';
+import { getTrackDedupeTokens } from '../../utils/helpers';
 
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams();
@@ -54,17 +55,21 @@ export default function PlaylistScreen() {
 
   const handleRemoveDuplicates = async () => {
     const currentTracks = playlist?.tracks || [];
-    const seen = new Set();
+    const seenIds = new Set();
+    const seenTokens = new Set();
     const duplicates = [];
 
     for (const t of currentTracks) {
       const tId = t.trackId || t.id || t._id;
-      const key = `${(t.title || '').toLowerCase().trim()}-${(t.artist || '').toLowerCase().trim()}`;
-      if ((tId && seen.has(tId)) || seen.has(key)) {
+      const tokens = getTrackDedupeTokens(t);
+      const isDuplicateId = tId && seenIds.has(String(tId));
+      const isDuplicateToken = tokens.some((tk) => seenTokens.has(tk));
+
+      if (isDuplicateId || isDuplicateToken) {
         if (tId) duplicates.push(tId);
       } else {
-        if (tId) seen.add(tId);
-        seen.add(key);
+        if (tId) seenIds.add(String(tId));
+        tokens.forEach((tk) => seenTokens.add(tk));
       }
     }
 

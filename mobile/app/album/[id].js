@@ -8,6 +8,7 @@ import { musicAPI } from '../../services/api';
 import TrackCard from '../../components/TrackCard';
 import EmptyState from '../../components/EmptyState';
 import { usePlayer } from '../../store/PlayerContext';
+import { deduplicateTracks } from '../../utils/helpers';
 
 export default function AlbumScreen() {
   const { id } = useLocalSearchParams();
@@ -38,7 +39,7 @@ export default function AlbumScreen() {
     return <EmptyState icon="albums" title="Album not found" />;
   }
 
-  const tracks = album.tracks || [];
+  const tracks = deduplicateTracks(album.tracks || []);
 
   return (
     <View style={styles.screen}>

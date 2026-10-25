@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Modal, TextInput,
 } from 'react-native';
@@ -11,6 +11,7 @@ import EmptyState from '../../components/EmptyState';
 import { usePlayer } from '../../store/PlayerContext';
 import { getDownloadedTracks } from '../../utils/downloader';
 import { showAlert } from '../../utils/alert';
+import { deduplicateTracks } from '../../utils/helpers';
 
 const TABS = ['playlists', 'favorites', 'downloads', 'history'];
 
@@ -36,8 +37,14 @@ export default function LibraryScreen() {
         getDownloadedTracks(),
       ]);
       if (pl.status === 'fulfilled') setPlaylists(pl.value?.playlists || []);
-      if (fav.status === 'fulfilled') setFavorites(fav.value?.favorites || []);
-      if (hist.status === 'fulfilled') setHistory(hist.value?.history || []);
+      if (fav.status === 'fulfilled') {
+        const rawFav = (fav.value?.favorites || []).map((f) => ({ ...f, id: f.trackId || f.id }));
+        setFavorites(deduplicateTracks(rawFav));
+      }
+      if (hist.status === 'fulfilled') {
+        const rawHist = (hist.value?.history || []).map((h) => ({ ...h, id: h.trackId || h.id }));
+        setHistory(deduplicateTracks(rawHist));
+      }
       if (down.status === 'fulfilled') setDownloads(down.value || []);
     } catch {}
     finally { setLoading(false); setRefreshing(false); }

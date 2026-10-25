@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Alert,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Alert, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -277,14 +277,11 @@ export default function ProfileScreen() {
 
       {/* Footer */}
       <View style={styles.footer}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.accent]}
-          style={styles.footerLogo}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Ionicons name="musical-notes" size={16} color={Colors.white} />
-        </LinearGradient>
+        <Image
+          source={require('../../assets/icon.png')}
+          style={styles.footerLogoImg}
+          resizeMode="contain"
+        />
         <Text style={styles.footerTitle}>{APP_NAME}</Text>
         <Text style={styles.footerTagline}>{APP_TAGLINE}</Text>
         <Text style={styles.footerNote}>
@@ -438,6 +435,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: Spacing.lg,
+  },
+  footerLogoImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    marginBottom: 6,
   },
   footerLogo: {
     width: 44,

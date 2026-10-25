@@ -134,18 +134,6 @@
   ],
   "history": [
     {
-      "_id": "hist_1791123787985_smbvd6",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Symphony No. 5 in C Minor",
-      "artist": "Ludwig van Beethoven",
-      "album": "Beethoven Symphonies",
-      "duration": 480,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-      "playedAt": "2026-10-04T14:23:07.986Z"
-    },
-    {
       "_id": "hist_1791123799847_t0dniz",
       "user": "user_1791123779438_mn609w",
       "trackId": "undefined",
@@ -158,30 +146,6 @@
       "playedAt": "2026-10-04T14:23:19.847Z"
     },
     {
-      "_id": "hist_1791123836726_wjrol2",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Symphony No. 5 in C Minor",
-      "artist": "Ludwig van Beethoven",
-      "album": "Beethoven Symphonies",
-      "duration": 480,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-      "playedAt": "2026-10-04T14:23:56.726Z"
-    },
-    {
-      "_id": "hist_1791123843635_yb9q02",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Für Elise",
-      "artist": "Ludwig van Beethoven",
-      "album": "Piano Pieces",
-      "duration": 175,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
-      "playedAt": "2026-10-04T14:24:03.635Z"
-    },
-    {
       "_id": "hist_1791123848567_qfg4hn",
       "user": "user_1791123779438_mn609w",
       "trackId": "undefined",
@@ -192,66 +156,6 @@
       "artworkUrl": null,
       "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
       "playedAt": "2026-10-04T14:24:08.568Z"
-    },
-    {
-      "_id": "hist_1791123851992_fssdv3",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Brandenburg Concerto No. 3",
-      "artist": "Johann Sebastian Bach",
-      "album": "Brandenburg Concertos",
-      "duration": 510,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
-      "playedAt": "2026-10-04T14:24:11.992Z"
-    },
-    {
-      "_id": "hist_1791123859814_nuj4m6",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Symphony No. 5 in C Minor",
-      "artist": "Ludwig van Beethoven",
-      "album": "Beethoven Symphonies",
-      "duration": 480,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-      "playedAt": "2026-10-04T14:24:19.814Z"
-    },
-    {
-      "_id": "hist_1791123914702_pc8sc7",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Für Elise",
-      "artist": "Ludwig van Beethoven",
-      "album": "Piano Pieces",
-      "duration": 175,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
-      "playedAt": "2026-10-04T14:25:14.702Z"
-    },
-    {
-      "_id": "hist_1791544570337_4g5bnp",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "The Four Seasons — Spring",
-      "artist": "Antonio Vivaldi",
-      "album": "The Four Seasons",
-      "duration": 330,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-      "playedAt": "2026-10-09T11:16:10.337Z"
-    },
-    {
-      "_id": "hist_1791544579097_9xvn5g",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Für Elise",
-      "artist": "Ludwig van Beethoven",
-      "album": "Piano Pieces",
-      "duration": 175,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
-      "playedAt": "2026-10-09T11:16:19.097Z"
     },
     {
       "_id": "hist_1791544581761_lhbz15",
@@ -276,18 +180,6 @@
       "artworkUrl": null,
       "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
       "playedAt": "2026-10-09T11:16:21.830Z"
-    },
-    {
-      "_id": "hist_1791544584160_c90fgu",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Symphony No. 5 in C Minor",
-      "artist": "Ludwig van Beethoven",
-      "album": "Beethoven Symphonies",
-      "duration": 480,
-      "artworkUrl": null,
-      "streamUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-      "playedAt": "2026-10-09T11:16:24.160Z"
     },
     {
       "_id": "hist_1791544595620_kl66qx",
@@ -326,42 +218,6 @@
       "playedAt": "2026-10-09T11:16:40.941Z"
     },
     {
-      "_id": "hist_1791726900428_nqjo3c",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Radhimaa (From \"Think Indie\")",
-      "artist": "Sai Abhyankkar, Nargis Teji, Asma Teji, Vivek",
-      "album": "Radhimaa (From \"Think Indie\")",
-      "duration": 259,
-      "artworkUrl": "https://c.saavncdn.com/877/Radhimaa-From-Think-Indie-Tamil-2026-20260827192132-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/877/875e41134def3f76517ce29ea7819fc8_320.mp4",
-      "playedAt": "2026-10-11T13:55:00.428Z"
-    },
-    {
-      "_id": "hist_1791726904303_qt9mtl",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Pavazha Malli (From \"Think Indie\")",
-      "artist": "Vivek, Sai Abhyankkar, Shruti Haasan",
-      "album": "Pavazha Malli (From \"Think Indie\")",
-      "duration": 252,
-      "artworkUrl": "https://c.saavncdn.com/984/Pavazha-Malli-From-Think-Indie-Tamil-2026-20260303084345-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/984/268f6efa6f609759153dfe361e5a77ea_320.mp4",
-      "playedAt": "2026-10-11T13:55:04.303Z"
-    },
-    {
-      "_id": "hist_1791726983106_p9mykm",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Radhimaa (From \"Think Indie\")",
-      "artist": "Sai Abhyankkar, Nargis Teji, Asma Teji, Vivek",
-      "album": "Radhimaa (From \"Think Indie\")",
-      "duration": 259,
-      "artworkUrl": "https://c.saavncdn.com/877/Radhimaa-From-Think-Indie-Tamil-2026-20260827192132-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/877/875e41134def3f76517ce29ea7819fc8_320.mp4",
-      "playedAt": "2026-10-11T13:56:23.106Z"
-    },
-    {
       "_id": "hist_1791726987849_kt87ai",
       "user": "user_1791123779438_mn609w",
       "trackId": "undefined",
@@ -372,18 +228,6 @@
       "artworkUrl": "https://c.saavncdn.com/984/Pavazha-Malli-From-Think-Indie-Tamil-2026-20260303084345-500x500.jpg",
       "streamUrl": "https://aac.saavncdn.com/984/268f6efa6f609759153dfe361e5a77ea_320.mp4",
       "playedAt": "2026-10-11T13:56:27.849Z"
-    },
-    {
-      "_id": "hist_1791726989920_ynykjo",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Alaakaa Loova (From \"OM Chapter 1: Udhiram - The Blood Wood\") [Tamil]",
-      "artist": "Sai Abhyankkar, Rokesh",
-      "album": "Alaakaa Loova (From \"OM Chapter 1: Udhiram - The Blood Wood\") [Tamil]",
-      "duration": 210,
-      "artworkUrl": "https://c.saavncdn.com/024/Alaakaa-Loova-From-OM-Chapter-1-Udhiram-The-Blood-Wood-Tamil-Tamil-2026-20260730045529-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/024/a7ac0cce4602509c19e29a0581bc801c_320.mp4",
-      "playedAt": "2026-10-11T13:56:29.920Z"
     },
     {
       "_id": "hist_1791727036803_gvr56z",
@@ -410,42 +254,6 @@
       "playedAt": "2026-10-11T13:57:21.540Z"
     },
     {
-      "_id": "hist_1791727061291_m3dlz0",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Apna Bana Le",
-      "artist": "Amitabh Bhattacharya, Sachin-Jigar, Arijit Singh",
-      "album": "Trending Love Songs",
-      "duration": 261,
-      "artworkUrl": "https://c.saavncdn.com/675/Trending-Love-Songs-Hindi-2026-20260506185328-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/675/1456dc2903d0fb4465d2d2904008803b_320.mp4",
-      "playedAt": "2026-10-11T13:57:41.291Z"
-    },
-    {
-      "_id": "hist_1791727221339_jik5eo",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Ishq de Fanniyar - Female",
-      "artist": "Jyotica Tangri, Shaarib Toshi, Kumaar",
-      "album": "Trending Love Songs",
-      "duration": 177,
-      "artworkUrl": "https://c.saavncdn.com/675/Trending-Love-Songs-Hindi-2026-20260506185328-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/675/f1f48664e51db48f0d26a40d42d515a8_320.mp4",
-      "playedAt": "2026-10-11T14:00:21.339Z"
-    },
-    {
-      "_id": "hist_1791727581879_r2lqrv",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Apna Bana Le",
-      "artist": "Amitabh Bhattacharya, Sachin-Jigar, Arijit Singh",
-      "album": "Trending Love Songs",
-      "duration": 261,
-      "artworkUrl": "https://c.saavncdn.com/675/Trending-Love-Songs-Hindi-2026-20260506185328-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/675/1456dc2903d0fb4465d2d2904008803b_320.mp4",
-      "playedAt": "2026-10-11T14:06:21.879Z"
-    },
-    {
       "_id": "hist_1791727587708_905ctp",
       "user": "user_1791123779438_mn609w",
       "trackId": "undefined",
@@ -456,54 +264,6 @@
       "artworkUrl": "https://c.saavncdn.com/675/Trending-Love-Songs-Hindi-2026-20260506185328-500x500.jpg",
       "streamUrl": "https://aac.saavncdn.com/675/f1f48664e51db48f0d26a40d42d515a8_320.mp4",
       "playedAt": "2026-10-11T14:06:27.708Z"
-    },
-    {
-      "_id": "hist_1791727771134_sogwg5",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Trending",
-      "artist": "Vicky Dhaliwal, Jasmeen Akhtar, Gurbilling",
-      "album": "Trending",
-      "duration": 133,
-      "artworkUrl": "https://c.saavncdn.com/400/Trending-Punjabi-2024-20241114144017-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/400/f39d9e316c3c5ba105d4753acc2ca9b8_320.mp4",
-      "playedAt": "2026-10-11T14:09:31.134Z"
-    },
-    {
-      "_id": "hist_1791727775366_ysk2so",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Apna Bana Le",
-      "artist": "Amitabh Bhattacharya, Sachin-Jigar, Arijit Singh",
-      "album": "Trending Love Songs",
-      "duration": 261,
-      "artworkUrl": "https://c.saavncdn.com/675/Trending-Love-Songs-Hindi-2026-20260506185328-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/675/1456dc2903d0fb4465d2d2904008803b_320.mp4",
-      "playedAt": "2026-10-11T14:09:35.366Z"
-    },
-    {
-      "_id": "hist_1791728234062_tvby83",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Trending",
-      "artist": "Vicky Dhaliwal, Jasmeen Akhtar, Gurbilling",
-      "album": "Trending",
-      "duration": 133,
-      "artworkUrl": "https://c.saavncdn.com/400/Trending-Punjabi-2024-20241114144017-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/400/f39d9e316c3c5ba105d4753acc2ca9b8_320.mp4",
-      "playedAt": "2026-10-11T14:17:14.062Z"
-    },
-    {
-      "_id": "hist_1791728255742_ou1s68",
-      "user": "user_1791123779438_mn609w",
-      "trackId": "undefined",
-      "title": "Radhimaa (From \"Think Indie\")",
-      "artist": "Sai Abhyankkar, Nargis Teji, Asma Teji, Vivek",
-      "album": "Radhimaa (From \"Think Indie\")",
-      "duration": 259,
-      "artworkUrl": "https://c.saavncdn.com/877/Radhimaa-From-Think-Indie-Tamil-2026-20260827192132-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/877/875e41134def3f76517ce29ea7819fc8_320.mp4",
-      "playedAt": "2026-10-11T14:17:35.742Z"
     },
     {
       "_id": "hist_1791732432135_hw9r8e",
@@ -662,18 +422,6 @@
       "playedAt": "2026-10-11T17:03:05.823Z"
     },
     {
-      "_id": "hist_1791741081566_9a30mw",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Trending",
-      "artist": "Vicky Dhaliwal, Jasmeen Akhtar, Gurbilling",
-      "album": "Trending",
-      "duration": 133,
-      "artworkUrl": "https://c.saavncdn.com/400/Trending-Punjabi-2024-20241114144017-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/400/f39d9e316c3c5ba105d4753acc2ca9b8_320.mp4",
-      "playedAt": "2026-10-11T17:51:21.566Z"
-    },
-    {
       "_id": "hist_1791741086317_knd4qb",
       "user": "user_1791741078889_gyq375",
       "trackId": "undefined",
@@ -686,54 +434,6 @@
       "playedAt": "2026-10-11T17:51:26.317Z"
     },
     {
-      "_id": "hist_1791741106782_cljro9",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Radhimaa (From \"Think Indie\")",
-      "artist": "Sai Abhyankkar, Nargis Teji, Asma Teji, Vivek",
-      "album": "Radhimaa (From \"Think Indie\")",
-      "duration": 259,
-      "artworkUrl": "https://c.saavncdn.com/877/Radhimaa-From-Think-Indie-Tamil-2026-20260827192132-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/877/875e41134def3f76517ce29ea7819fc8_320.mp4",
-      "playedAt": "2026-10-11T17:51:46.782Z"
-    },
-    {
-      "_id": "hist_1791741247279_vr4r25",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Trending",
-      "artist": "Vicky Dhaliwal, Jasmeen Akhtar, Gurbilling",
-      "album": "Trending",
-      "duration": 133,
-      "artworkUrl": "https://c.saavncdn.com/400/Trending-Punjabi-2024-20241114144017-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/400/f39d9e316c3c5ba105d4753acc2ca9b8_320.mp4",
-      "playedAt": "2026-10-11T17:54:07.279Z"
-    },
-    {
-      "_id": "hist_1791741252419_igwjuv",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Alaakaa Loova (From \"OM Chapter 1: Udhiram - The Blood Wood\") [Tamil]",
-      "artist": "Sai Abhyankkar, Rokesh",
-      "album": "Alaakaa Loova (From \"OM Chapter 1: Udhiram - The Blood Wood\") [Tamil]",
-      "duration": 210,
-      "artworkUrl": "https://c.saavncdn.com/024/Alaakaa-Loova-From-OM-Chapter-1-Udhiram-The-Blood-Wood-Tamil-Tamil-2026-20260730045529-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/024/a7ac0cce4602509c19e29a0581bc801c_320.mp4",
-      "playedAt": "2026-10-11T17:54:12.419Z"
-    },
-    {
-      "_id": "hist_1791742056391_vbu7ca",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Trending",
-      "artist": "Vicky Dhaliwal, Jasmeen Akhtar, Gurbilling",
-      "album": "Trending",
-      "duration": 133,
-      "artworkUrl": "https://c.saavncdn.com/400/Trending-Punjabi-2024-20241114144017-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/400/f39d9e316c3c5ba105d4753acc2ca9b8_320.mp4",
-      "playedAt": "2026-10-11T18:07:36.391Z"
-    },
-    {
       "_id": "hist_1791742061707_wruajr",
       "user": "user_1791741078889_gyq375",
       "trackId": "undefined",
@@ -744,18 +444,6 @@
       "artworkUrl": "https://c.saavncdn.com/877/Radhimaa-From-Think-Indie-Tamil-2026-20260827192132-500x500.jpg",
       "streamUrl": "https://aac.saavncdn.com/877/875e41134def3f76517ce29ea7819fc8_320.mp4",
       "playedAt": "2026-10-11T18:07:41.707Z"
-    },
-    {
-      "_id": "hist_1791742062826_jjly18",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Pavazha Malli (From \"Think Indie\")",
-      "artist": "Vivek, Sai Abhyankkar, Shruti Haasan",
-      "album": "Pavazha Malli (From \"Think Indie\")",
-      "duration": 252,
-      "artworkUrl": "https://c.saavncdn.com/984/Pavazha-Malli-From-Think-Indie-Tamil-2026-20260303084345-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/984/268f6efa6f609759153dfe361e5a77ea_320.mp4",
-      "playedAt": "2026-10-11T18:07:42.826Z"
     },
     {
       "_id": "hist_1791742064214_zwrcdv",
@@ -806,18 +494,6 @@
       "playedAt": "2026-10-11T18:09:52.717Z"
     },
     {
-      "_id": "hist_1791742236361_ynir1n",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Raavana Mavandaa (From \"Jana Nayagan\")",
-      "artist": "Anirudh Ravichander, Vivek",
-      "album": "Kollywood Mass Superhits",
-      "duration": 107,
-      "artworkUrl": "https://c.saavncdn.com/999/Kollywood-Mass-Superhits-Tamil-2026-20260813161233-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/999/3cb2c3b5769ff4c476bf2cd50c934483_320.mp4",
-      "playedAt": "2026-10-11T18:10:36.361Z"
-    },
-    {
       "_id": "hist_1791742292500_0ntdjl",
       "user": "user_1791741078889_gyq375",
       "trackId": "undefined",
@@ -852,42 +528,6 @@
       "artworkUrl": "https://c.saavncdn.com/450/Gehra-Hua-From-Dhurandhar-Hindi-2025-20251205154217-500x500.jpg",
       "streamUrl": "https://aac.saavncdn.com/450/f467e05e2825cec2203546333e0d0550_320.mp4",
       "playedAt": "2026-10-11T18:13:59.575Z"
-    },
-    {
-      "_id": "hist_1791742833433_uoxf4h",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Gehra Hua",
-      "artist": "Irshad Kamil, Arijit Singh, Shashwat Sachdev, Armaan Khan",
-      "album": "Dhurandhar",
-      "duration": 362,
-      "artworkUrl": "https://c.saavncdn.com/475/Dhurandhar-Hindi-2025-20260203083204-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/475/04cc3b6ccd915df473947d932f094545_320.mp4",
-      "playedAt": "2026-10-11T18:20:33.433Z"
-    },
-    {
-      "_id": "hist_1791742846608_7a2glu",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Gehra Hua",
-      "artist": "Irshad Kamil, Arijit Singh, Shashwat Sachdev, Armaan Khan",
-      "album": "Dhurandhar",
-      "duration": 362,
-      "artworkUrl": "https://c.saavncdn.com/475/Dhurandhar-Hindi-2025-20260203083204-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/475/04cc3b6ccd915df473947d932f094545_320.mp4",
-      "playedAt": "2026-10-11T18:20:46.608Z"
-    },
-    {
-      "_id": "hist_1791742848695_nkn8cl",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Tum Hi Ho (From \"Aashiqui 2\")",
-      "artist": "Arijit Singh, Mithoon",
-      "album": "Best Of Arijit Singh - Collection Of Romantic Songs",
-      "duration": 261,
-      "artworkUrl": "https://c.saavncdn.com/840/Best-Of-Arijit-Singh-Collection-Of-Romantic-Songs-Hindi-2025-20251203161112-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/840/c9e70fb62d66fa6e14f6b7cdbc56cc05_320.mp4",
-      "playedAt": "2026-10-11T18:20:48.695Z"
     },
     {
       "_id": "hist_1791742888519_r16vt2",
@@ -938,18 +578,6 @@
       "playedAt": "2026-10-12T01:04:32.334Z"
     },
     {
-      "_id": "hist_1791767077029_yjv9ak",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Gabriela",
-      "artist": "Katseye",
-      "album": "Discover 2025: Popular Global Picks",
-      "duration": 196,
-      "artworkUrl": "https://c.saavncdn.com/499/Discover-2025-Popular-Global-Picks-Korean-2025-20260213034555-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/499/a3184cc16124cd6b6e13a8f584569fea_320.mp4",
-      "playedAt": "2026-10-12T01:04:37.029Z"
-    },
-    {
       "_id": "hist_1791767077883_1meue5",
       "user": "user_1791741078889_gyq375",
       "trackId": "undefined",
@@ -972,30 +600,6 @@
       "artworkUrl": "https://c.saavncdn.com/479/Vaidehi-Kaathirundhaal-Tamil-2023-20251211185418-500x500.jpg",
       "streamUrl": "https://aac.saavncdn.com/479/fbbc9f1f613b6719a79275ad5e7eecef_320.mp4",
       "playedAt": "2026-10-12T02:10:53.858Z"
-    },
-    {
-      "_id": "hist_1791771056186_umujgc",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Rasathi Rasathi",
-      "artist": "Harini, Anuradha Sriram, Arun Mozhi",
-      "album": "Kanna Unnai Thedukiren",
-      "duration": 300,
-      "artworkUrl": "https://c.saavncdn.com/123/SONY_886443700123-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/123/9afebaaffb4dbba2d008fec6a4a996a6_320.mp4",
-      "playedAt": "2026-10-12T02:10:56.186Z"
-    },
-    {
-      "_id": "hist_1791771079690_lhqk5y",
-      "user": "user_1791741078889_gyq375",
-      "trackId": "undefined",
-      "title": "Rasathi",
-      "artist": "Santhosh Narayanan, Lalitha Vijaykumar",
-      "album": "36 Vayadhinile (Original Motion Picture Soundtrack)",
-      "duration": 265,
-      "artworkUrl": "https://c.saavncdn.com/193/36-Vayadhinile-Original-Motion-Picture-Soundtrack-Tamil-2015-20250910161139-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/193/aa0aed8f5a1725d0a73cec237f9421e4_320.mp4",
-      "playedAt": "2026-10-12T02:11:19.690Z"
     },
     {
       "_id": "hist_1791771080454_l6a0m1",
@@ -1164,18 +768,6 @@
       "artworkUrl": "https://c.saavncdn.com/877/Radhimaa-From-Think-Indie-Tamil-2026-20260827192132-500x500.jpg",
       "streamUrl": "https://aac.saavncdn.com/877/875e41134def3f76517ce29ea7819fc8_320.mp4",
       "playedAt": "2026-10-16T02:17:57.267Z"
-    },
-    {
-      "_id": "hist_1792117080231_y2cyhl",
-      "user": "user_1792116872108_noco4f",
-      "trackId": "undefined",
-      "title": "Alaakaa Loova (From \"OM Chapter 1: Udhiram - The Blood Wood\") [Tamil]",
-      "artist": "Sai Abhyankkar, Rokesh",
-      "album": "Alaakaa Loova (From \"OM Chapter 1: Udhiram - The Blood Wood\") [Tamil]",
-      "duration": 210,
-      "artworkUrl": "https://c.saavncdn.com/024/Alaakaa-Loova-From-OM-Chapter-1-Udhiram-The-Blood-Wood-Tamil-Tamil-2026-20260730045529-500x500.jpg",
-      "streamUrl": "https://aac.saavncdn.com/024/a7ac0cce4602509c19e29a0581bc801c_320.mp4",
-      "playedAt": "2026-10-16T02:18:00.232Z"
     },
     {
       "_id": "hist_1792117190554_haayl1",

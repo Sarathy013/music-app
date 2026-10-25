@@ -15,6 +15,7 @@ import AlbumCard from '../../components/AlbumCard';
 import SectionHeader from '../../components/SectionHeader';
 import { TrackSkeleton, AlbumCardSkeleton } from '../../components/SkeletonLoader';
 import TasteOnboardingModal, { getUserPreferences, MOODS } from '../../components/TasteOnboardingModal';
+import { deduplicateTracks, getTrackDedupeKey, getTrackDedupeTokens } from '../../utils/helpers';
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -31,6 +32,9 @@ const HOME_LANGUAGES = [
   { id: 'telugu', label: '⚡ Telugu Hits', color: '#10B981' },
   { id: 'hindi', label: '🇮🇳 Hindi Hits', color: '#EAB308' },
   { id: 'english', label: '🌍 Global English', color: '#38BDF8' },
+  { id: 'malayalam', label: '🌴 Malayalam Hits', color: '#06B6D4' },
+  { id: 'punjabi', label: '🔥 Punjabi Hits', color: '#EC4899' },
+  { id: 'kannada', label: '👑 Kannada Hits', color: '#8B5CF6' },
 ];
 
 function ArtistChip({ artist, onPress }) {
@@ -69,6 +73,9 @@ export default function HomeScreen() {
   const [hindiHits, setHindiHits] = useState([]);
   const [hindiClassics, setHindiClassics] = useState([]);
   const [englishHits, setEnglishHits] = useState([]);
+  const [malayalamHits, setMalayalamHits] = useState([]);
+  const [punjabiHits, setPunjabiHits] = useState([]);
+  const [kannadaHits, setKannadaHits] = useState([]);
   const [artists, setArtists] = useState([]);
   
   // Personalized Recommendations based on User's Taste Questionnaire
@@ -109,12 +116,13 @@ export default function HomeScreen() {
 
       const res = await musicAPI.search(query, 'tracks', 40, 1, primaryLang, 'saavn');
       const list = res?.results || [];
-      const seen = new Set();
-      const unique = list.filter((t) => {
-        if (!t || !t.id || seen.has(t.id)) return false;
-        seen.add(t.id);
-        return true;
+      const trendKeys = new Set();
+      const trendIds = new Set();
+      trending.forEach((t) => {
+        if (t?.id) trendIds.add(t.id);
+        getTrackDedupeTokens(t).forEach((tok) => trendKeys.add(tok));
       });
+      const unique = deduplicateTracks(list, trendKeys, trendIds);
       setRecommendedTracks(unique);
     } catch {}
   };
@@ -131,6 +139,9 @@ export default function HomeScreen() {
     if (lang === 'telugu') return 'All Telugu Songs Tollywood DSP Thaman';
     if (lang === 'hindi') return 'All Hindi Songs Bollywood Arijit Kishore';
     if (lang === 'english') return 'All English Pop Rock Billboard Hits';
+    if (lang === 'malayalam') return 'All Malayalam Songs Sushin Hesham Jakes';
+    if (lang === 'punjabi') return 'All Punjabi Songs Diljit Karan Aujla';
+    if (lang === 'kannada') return 'All Kannada Songs Ravi Basrur KGF';
     return 'Trending Songs Hits Worldwide';
   };
 
@@ -145,40 +156,62 @@ export default function HomeScreen() {
         teluguRes, teluguClassicsRes,
         hindiRes, hindiClassicsRes,
         englishRes,
+        malayalamRes,
+        punjabiRes,
+        kannadaRes,
         feedRes,
       ] = await Promise.allSettled([
         musicAPI.getTrending(40, lang),
         musicAPI.getPopularArtists(18),
-        musicAPI.search('Latest Tamil Songs Anirudh', 'tracks', 40, 1, 'tamil', 'saavn'),
+        musicAPI.search('Latest Tamil Songs 2024 Amaran Vettaiyan GOAT Anirudh', 'tracks', 40, 1, 'tamil', 'saavn'),
         musicAPI.search('Classic Tamil Old 80s 90s Ilaiyaraaja SPB', 'tracks', 40, 1, 'tamil', 'saavn'),
-        musicAPI.search('Latest Telugu Songs Tollywood', 'tracks', 40, 1, 'telugu', 'saavn'),
+        musicAPI.search('Latest Telugu Songs 2024 Pushpa 2 Devara Tollywood', 'tracks', 40, 1, 'telugu', 'saavn'),
         musicAPI.search('Classic Telugu Songs SPB Ilaiyaraaja Old', 'tracks', 40, 1, 'telugu', 'saavn'),
-        musicAPI.search('Hindi Hits Arijit Singh Bollywood', 'tracks', 40, 1, 'hindi', 'saavn'),
+        musicAPI.search('Latest Bollywood Hits 2024 Stree 2 Tauba Tauba Arijit', 'tracks', 40, 1, 'hindi', 'saavn'),
         musicAPI.search('Old Hindi Songs Kishore Kumar RD Burman', 'tracks', 40, 1, 'hindi', 'saavn'),
-        musicAPI.search('Global Pop English Hits 2024', 'tracks', 40, 1, 'english', 'saavn'),
+        musicAPI.search('Global Pop English Hits 2024 Sabrina Billie Bruno', 'tracks', 40, 1, 'english', 'saavn'),
+        musicAPI.search('Latest Malayalam Songs 2024 Aavesham Premalu Sushin', 'tracks', 40, 1, 'malayalam', 'saavn'),
+        musicAPI.search('Latest Punjabi Hits 2024 Karan Aujla Diljit Dosanjh', 'tracks', 40, 1, 'punjabi', 'saavn'),
+        musicAPI.search('Latest Kannada Songs 2024 KGF Kantara Ravi Basrur', 'tracks', 40, 1, 'kannada', 'saavn'),
         musicAPI.search(getFeedQuery(lang), 'tracks', 100, 1, lang, 'saavn'),
       ]);
 
-      const dedup = (list) => {
-        const seen = new Set();
-        return (list || []).filter((t) => {
-          if (!t || !t.id) return false;
-          if (seen.has(t.id)) return false;
-          seen.add(t.id);
-          return true;
-        });
+      // Cascade deduplication across all sections: NO song is repeated anywhere on the page
+      const globalSeenKeys = new Set();
+      const globalSeenIds = new Set();
+
+      const dedupeSection = (items) => {
+        return deduplicateTracks(items, globalSeenKeys, globalSeenIds);
       };
 
-      if (trendingRes.status === 'fulfilled') setTrending(dedup(trendingRes.value?.tracks || []));
+      const cleanTrending = dedupeSection(trendingRes.status === 'fulfilled' ? trendingRes.value?.tracks || [] : []);
+      const cleanTamilHits = dedupeSection(tamilRes.status === 'fulfilled' ? tamilRes.value?.results || [] : []);
+      const cleanTamilClassics = dedupeSection(tamilClassicsRes.status === 'fulfilled' ? tamilClassicsRes.value?.results || [] : []);
+      const cleanTeluguHits = dedupeSection(teluguRes.status === 'fulfilled' ? teluguRes.value?.results || [] : []);
+      const cleanTeluguClassics = dedupeSection(teluguClassicsRes.status === 'fulfilled' ? teluguClassicsRes.value?.results || [] : []);
+      const cleanHindiHits = dedupeSection(hindiRes.status === 'fulfilled' ? hindiRes.value?.results || [] : []);
+      const cleanHindiClassics = dedupeSection(hindiClassicsRes.status === 'fulfilled' ? hindiClassicsRes.value?.results || [] : []);
+      const cleanEnglishHits = dedupeSection(englishRes.status === 'fulfilled' ? englishRes.value?.results || [] : []);
+      const cleanMalayalamHits = dedupeSection(malayalamRes.status === 'fulfilled' ? malayalamRes.value?.results || [] : []);
+      const cleanPunjabiHits = dedupeSection(punjabiRes.status === 'fulfilled' ? punjabiRes.value?.results || [] : []);
+      const cleanKannadaHits = dedupeSection(kannadaRes.status === 'fulfilled' ? kannadaRes.value?.results || [] : []);
+
+      setTrending(cleanTrending);
       if (artistsRes.status === 'fulfilled') setArtists(artistsRes.value?.artists || []);
-      if (tamilRes.status === 'fulfilled') setTamilHits(dedup(tamilRes.value?.results || []));
-      if (tamilClassicsRes.status === 'fulfilled') setTamilClassics(dedup(tamilClassicsRes.value?.results || []));
-      if (teluguRes.status === 'fulfilled') setTeluguHits(dedup(teluguRes.value?.results || []));
-      if (teluguClassicsRes.status === 'fulfilled') setTeluguClassics(dedup(teluguClassicsRes.value?.results || []));
-      if (hindiRes.status === 'fulfilled') setHindiHits(dedup(hindiRes.value?.results || []));
-      if (hindiClassicsRes.status === 'fulfilled') setHindiClassics(dedup(hindiClassicsRes.value?.results || []));
-      if (englishRes.status === 'fulfilled') setEnglishHits(dedup(englishRes.value?.results || []));
-      if (feedRes.status === 'fulfilled') setFeedTracks(dedup(feedRes.value?.results || []));
+      setTamilHits(cleanTamilHits);
+      setTamilClassics(cleanTamilClassics);
+      setTeluguHits(cleanTeluguHits);
+      setTeluguClassics(cleanTeluguClassics);
+      setHindiHits(cleanHindiHits);
+      setHindiClassics(cleanHindiClassics);
+      setEnglishHits(cleanEnglishHits);
+      setMalayalamHits(cleanMalayalamHits);
+      setPunjabiHits(cleanPunjabiHits);
+      setKannadaHits(cleanKannadaHits);
+
+      const rawFeed = feedRes.status === 'fulfilled' ? feedRes.value?.results || [] : [];
+      const cleanFeed = dedupeSection(rawFeed);
+      setFeedTracks(cleanFeed);
     } catch (e) {
       console.warn('Home fetch error:', e.message);
     } finally {
@@ -212,8 +245,21 @@ export default function HomeScreen() {
         setHasMore(false);
       } else {
         setFeedTracks((prev) => {
-          const seen = new Set(prev.map((t) => t.id));
-          const additions = newItems.filter((t) => t && t.id && !seen.has(t.id));
+          const currentKeys = new Set();
+          const currentIds = new Set();
+          [
+            ...trending,
+            ...tamilHits, ...tamilClassics,
+            ...teluguHits, ...teluguClassics,
+            ...hindiHits, ...hindiClassics,
+            ...englishHits,
+            ...malayalamHits, ...punjabiHits, ...kannadaHits,
+            ...prev,
+          ].forEach((t) => {
+            if (t?.id) currentIds.add(t.id);
+            getTrackDedupeTokens(t).forEach((tok) => currentKeys.add(tok));
+          });
+          const additions = deduplicateTracks(newItems, currentKeys, currentIds);
           return [...prev, ...additions];
         });
         setFeedPage(nextPage);
@@ -232,11 +278,82 @@ export default function HomeScreen() {
     setBoostingFeed(true);
     try {
       const qSeeds = {
-        tamil: ['Tamil Superhits Anirudh', 'AR Rahman Tamil Hits', 'Ilaiyaraaja 80s 90s Melodies', 'Yuvan Harris Tamil', 'Kollywood Mass Songs'],
-        telugu: ['Telugu Tollywood Hits DSP', 'Thaman S Telugu Superhits', 'SPB Telugu Golden Classics', 'Sid Sriram Telugu Melodies', 'Allu Arjun Mahesh Hits'],
-        hindi: ['Bollywood Hits 2024 Arijit', 'Kishore Kumar Lata 70s 80s', '90s Evergreen Bollywood Hits', 'Pritam Bollywood Hits', 'Sonu Nigam KK Hits'],
-        english: ['Billboard Hot 100 Hits', 'Today Top Hits Global Pop', 'Taylor Swift The Weeknd Hits', 'Classic 80s 90s Rock Pop', 'Ed Sheeran Acoustic Hits'],
-        all: ['Tamil Superhits Kollywood', 'Telugu Tollywood Superhits', 'Bollywood Blockbuster Hits', 'Billboard Hot 100 English Hits'],
+        tamil: [
+          'Amaran Tamil Songs Sai Abhyankaar GV Prakash',
+          'Vettaiyan Manasilaayo Rajinikanth Anirudh',
+          'GOAT Greatest Of All Time Thalapathy Vijay Yuvan',
+          'Aasa Kooda Sai Abhyankaar',
+          'Devara Tamil Chuttamalle Anirudh',
+          'Pushpa 2 The Rule Tamil Devi Sri Prasad',
+          'Raayan Dhanush AR Rahman',
+          'Tamil Superhits Anirudh Rahman',
+          'Ilaiyaraaja 80s 90s Melodies SPB',
+        ],
+        telugu: [
+          'Pushpa 2 The Rule Telugu DSP Allu Arjun',
+          'Devara Chuttamalle Fear Song Anirudh Jr NTR',
+          'Saripodhaa Sanivaaram Nani Jakes Bejoy',
+          'Kalki 2898 AD Santhosh Narayanan Prabhas',
+          'Guntur Kaaram Kurchi Madathapetti Thaman',
+          'HanuMan GowraHari',
+          'Tillu Square Radhika Ram Miriyala',
+          'Telugu Tollywood Hits DSP',
+          'SPB Telugu Golden Classics',
+        ],
+        hindi: [
+          'Stree 2 Aaj Ki Raat Aayi Nai Sachin Jigar',
+          'Tauba Tauba Bad Newz Karan Aujla',
+          'Bhool Bhulaiyaa 3 Pitbull Diljit Dosanjh',
+          'Animal Arjan Vailly Satranga Ranbir Kapoor',
+          'Fighter Hrithik Roshan Vishal Shekhar',
+          'Dunki O Maahi Pritam Arijit',
+          'Bollywood Hits 2024 Arijit',
+          'Kishore Kumar Lata 70s 80s',
+          '90s Evergreen Bollywood Hits',
+        ],
+        english: [
+          'Espresso Sabrina Carpenter',
+          'Birds of a Feather Billie Eilish',
+          'Die With A Smile Lady Gaga Bruno Mars',
+          'Apt ROSE Bruno Mars',
+          'Beautiful Things Benson Boone',
+          'Good Luck Babe Chappell Roan',
+          'Lose Control Teddy Swims',
+          'Billboard Hot 100 Hits',
+          'Today Top Hits Global Pop',
+          'Taylor Swift The Weeknd Hits',
+        ],
+        malayalam: [
+          'Latest Malayalam Songs Aavesham Premalu',
+          'Sushin Shyam Malayalam Hits',
+          'Manjummel Boys Malayalam Hits',
+          'Hesham Abdul Wahab Hits',
+          'Top Mollywood Superhits',
+          'Malayalam Melody Hits Jakes Bejoy',
+        ],
+        punjabi: [
+          'Latest Punjabi Hits 2024 Karan Aujla',
+          'Diljit Dosanjh Punjabi Superhits',
+          'AP Dhillon Shubh Punjabi Hits',
+          'Sidhu Moose Wala Hits',
+          'Punjabi Party Hits B Praak',
+        ],
+        kannada: [
+          'Latest Kannada Songs Sandalwood 2024',
+          'KGF Kantara Kannada Hits',
+          'Ravi Basrur Kannada Superhits',
+          'Sanjith Hegde Kannada Melodies',
+          'Arjun Janya Kannada Hits',
+        ],
+        all: [
+          'Amaran Vettaiyan Tamil Hits',
+          'Pushpa 2 Devara Telugu Hits',
+          'Stree 2 Tauba Tauba Bollywood Hits',
+          'Espresso Birds of a Feather Global Pop Hits',
+          'Aavesham Manjummel Boys Malayalam Hits',
+          'Diljit Karan Aujla Punjabi Hits',
+          'KGF Kantara Kannada Hits',
+        ],
       };
       const seeds = qSeeds[selectedLang] || qSeeds.all;
       const promises = seeds.map((s) => musicAPI.search(s, 'tracks', 60, 1, selectedLang, 'saavn'));
@@ -247,8 +364,21 @@ export default function HomeScreen() {
 
       if (newItems.length > 0) {
         setFeedTracks((prev) => {
-          const seen = new Set(prev.map((t) => t.id));
-          const additions = newItems.filter((t) => t && t.id && !seen.has(t.id));
+          const currentKeys = new Set();
+          const currentIds = new Set();
+          [
+            ...trending,
+            ...tamilHits, ...tamilClassics,
+            ...teluguHits, ...teluguClassics,
+            ...hindiHits, ...hindiClassics,
+            ...englishHits,
+            ...malayalamHits, ...punjabiHits, ...kannadaHits,
+            ...prev,
+          ].forEach((t) => {
+            if (t?.id) currentIds.add(t.id);
+            getTrackDedupeTokens(t).forEach((tok) => currentKeys.add(tok));
+          });
+          const additions = deduplicateTracks(newItems, currentKeys, currentIds);
           return [...prev, ...additions];
         });
       }
@@ -280,9 +410,16 @@ export default function HomeScreen() {
             end={{ x: 0.5, y: 1 }}
           >
             <View style={styles.header}>
-              <View>
-                <Text style={styles.greeting}>{getGreeting()}</Text>
-                <Text style={styles.username}>{user?.username || 'Music Lover'}</Text>
+              <View style={styles.headerBrandRow}>
+                <Image
+                  source={require('../../assets/icon.png')}
+                  style={styles.headerLogoImg}
+                  resizeMode="contain"
+                />
+                <View>
+                  <Text style={styles.greeting}>{getGreeting()}</Text>
+                  <Text style={styles.username}>{user?.username || 'Music Lover'}</Text>
+                </View>
               </View>
               <TouchableOpacity
                 style={styles.avatarBtn}
@@ -580,7 +717,7 @@ export default function HomeScreen() {
         )}
 
         {/* 7. Global English Hits Section */}
-        {englishHits.length > 0 && selectedLang !== 'tamil' && selectedLang !== 'hindi' && selectedLang !== 'telugu' && (
+        {englishHits.length > 0 && selectedLang !== 'tamil' && selectedLang !== 'hindi' && selectedLang !== 'telugu' && selectedLang !== 'malayalam' && selectedLang !== 'punjabi' && selectedLang !== 'kannada' && (
           <View style={styles.section}>
             <SectionHeader
               title="🌍 Global English Pop & Hits"
@@ -593,6 +730,66 @@ export default function HomeScreen() {
                   key={track.id}
                   item={track}
                   onPress={(t) => loadAndPlay(t, englishHits, englishHits.indexOf(t))}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* 8. Mollywood & Malayalam Hits Section */}
+        {malayalamHits.length > 0 && (selectedLang === 'all' || selectedLang === 'malayalam') && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="🌴 Mollywood & Malayalam Hits"
+              subtitle="Aavesham · Premalu · Manjummel Boys · Sushin Shyam · Hesham"
+              onSeeAll={() => router.push({ pathname: '/see-more', params: { language: 'malayalam' } })}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+              {malayalamHits.map((track) => (
+                <AlbumCard
+                  key={track.id}
+                  item={track}
+                  onPress={(t) => loadAndPlay(t, malayalamHits, malayalamHits.indexOf(t))}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* 9. Punjabi Hits Section */}
+        {punjabiHits.length > 0 && (selectedLang === 'all' || selectedLang === 'punjabi') && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="🔥 Punjabi Beats & Blockbusters"
+              subtitle="Diljit Dosanjh · Karan Aujla · AP Dhillon · Sidhu Moose Wala"
+              onSeeAll={() => router.push({ pathname: '/see-more', params: { language: 'punjabi' } })}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+              {punjabiHits.map((track) => (
+                <AlbumCard
+                  key={track.id}
+                  item={track}
+                  onPress={(t) => loadAndPlay(t, punjabiHits, punjabiHits.indexOf(t))}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* 10. Sandalwood & Kannada Superhits Section */}
+        {kannadaHits.length > 0 && (selectedLang === 'all' || selectedLang === 'kannada') && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="👑 Sandalwood & Kannada Hits"
+              subtitle="KGF · Kantara · Ravi Basrur · Sanjith Hegde · Arjun Janya"
+              onSeeAll={() => router.push({ pathname: '/see-more', params: { language: 'kannada' } })}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+              {kannadaHits.map((track) => (
+                <AlbumCard
+                  key={track.id}
+                  item={track}
+                  onPress={(t) => loadAndPlay(t, kannadaHits, kannadaHits.indexOf(t))}
                 />
               ))}
             </ScrollView>
@@ -628,6 +825,12 @@ export default function HomeScreen() {
                   ? '🇮🇳 All Hindi Songs Stream (Bollywood & Retro)'
                   : selectedLang === 'english'
                   ? '🌍 All Global English Songs Stream'
+                  : selectedLang === 'malayalam'
+                  ? '🌴 All Malayalam Songs Stream (Mollywood)'
+                  : selectedLang === 'punjabi'
+                  ? '🔥 All Punjabi Songs Stream (Bhangra & Pop)'
+                  : selectedLang === 'kannada'
+                  ? '👑 All Kannada Songs Stream (Sandalwood)'
                   : '🎵 All Music & Songs Stream'
               }
               subtitle={`Showing ${feedTracks.length} songs · Tap any track to play immediately`}
@@ -767,6 +970,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  headerBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerLogoImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   greeting: {
     fontFamily: Typography.fontFamily.regular,

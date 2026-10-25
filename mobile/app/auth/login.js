@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Modal, ActivityIndicator,
+  View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Modal, ActivityIndicator, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -151,9 +151,13 @@ export default function LoginScreen() {
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           {/* Logo */}
           <View style={styles.logoWrap}>
-            <LinearGradient colors={[Colors.primary, Colors.accentGlow]} style={styles.logo}>
-              <Text style={styles.logoEmoji}>🎵</Text>
-            </LinearGradient>
+            <View style={styles.logoCircle}>
+              <Image
+                source={require('../../assets/icon.png')}
+                style={styles.logoImg}
+                resizeMode="contain"
+              />
+            </View>
             <Text style={styles.appName}>FreeBeat</Text>
             <Text style={styles.tagline}>Welcome back</Text>
           </View>
@@ -303,11 +307,13 @@ const styles = StyleSheet.create({
   bg: { flex: 1 },
   container: { flexGrow: 1, justifyContent: 'center', padding: Spacing['2xl'] },
   logoWrap: { alignItems: 'center', marginBottom: Spacing['3xl'], gap: 10 },
-  logo: {
-    width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center',
-    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 20, elevation: 15,
+  logoCircle: {
+    width: 90, height: 90, borderRadius: 24, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#000000', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.7, shadowRadius: 20, elevation: 15,
+    overflow: 'hidden',
   },
-  logoEmoji: { fontSize: 36 },
+  logoImg: { width: 90, height: 90 },
   appName: { fontFamily: Typography.fontFamily.bold, fontSize: Typography.fontSize['3xl'], color: Colors.textPrimary },
   tagline: { fontFamily: Typography.fontFamily.regular, fontSize: Typography.fontSize.base, color: Colors.textSecondary },
   form: { gap: Spacing.base },

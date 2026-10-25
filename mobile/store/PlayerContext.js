@@ -4,6 +4,7 @@ import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { isRunningInExpoGo } from 'expo';
 import { historyAPI, musicAPI } from '../services/api';
 import { REPEAT_MODES, SLEEP_TIMER_OPTIONS } from '../constants/config';
+import { deduplicateTracks, getTrackDedupeTokens } from '../utils/helpers';
 
 let Notifications = null;
 // expo-notifications remote push functionality was removed from Expo Go in SDK 53+
@@ -207,8 +208,19 @@ export function PlayerProvider({ children }) {
         soundRef.current = null;
       }
 
-      dispatch({ type: 'SET_TRACK', payload: { track: playableTrack, index } });
-      if (queue.length) dispatch({ type: 'SET_QUEUE', payload: queue });
+      let cleanQueue = queue;
+      let cleanIndex = index;
+      if (queue && queue.length > 0) {
+        cleanQueue = deduplicateTracks(queue);
+        const trackTokens = getTrackDedupeTokens(playableTrack);
+        const matchIdx = cleanQueue.findIndex(
+          (t) => String(t.id) === String(playableTrack.id) || getTrackDedupeTokens(t).some((tk) => trackTokens.includes(tk))
+        );
+        cleanIndex = matchIdx >= 0 ? matchIdx : Math.min(index, cleanQueue.length - 1);
+      }
+
+      dispatch({ type: 'SET_TRACK', payload: { track: playableTrack, index: cleanIndex } });
+      if (cleanQueue.length) dispatch({ type: 'SET_QUEUE', payload: cleanQueue });
       dispatch({ type: 'SHOW_PLAYER' });
       dispatch({ type: 'SET_LOADING', payload: true });
 
@@ -469,15 +481,29 @@ export function PlayerProvider({ children }) {
   };
 
   const addToQueue = (track) => {
+    if (!track) return;
     const s = stateRef.current;
-    dispatch({ type: 'SET_QUEUE', payload: [...s.queue, track] });
+    const trackTokens = getTrackDedupeTokens(track);
+    const exists = s.queue.some(
+      (t) => String(t.id) === String(track.id) || getTrackDedupeTokens(t).some((tk) => trackTokens.includes(tk))
+    );
+    if (!exists) {
+      dispatch({ type: 'SET_QUEUE', payload: [...s.queue, track] });
+    }
   };
 
   const addNextInQueue = (track) => {
+    if (!track) return;
     const s = stateRef.current;
-    const newQueue = [...s.queue];
-    newQueue.splice(s.currentIndex + 1, 0, track);
-    dispatch({ type: 'SET_QUEUE', payload: newQueue });
+    const trackTokens = getTrackDedupeTokens(track);
+    const exists = s.queue.some(
+      (t) => String(t.id) === String(track.id) || getTrackDedupeTokens(t).some((tk) => trackTokens.includes(tk))
+    );
+    if (!exists) {
+      const newQueue = [...s.queue];
+      newQueue.splice(s.currentIndex + 1, 0, track);
+      dispatch({ type: 'SET_QUEUE', payload: newQueue });
+    }
   };
 
   return (

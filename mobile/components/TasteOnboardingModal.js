@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Dimensions,
 } from 'react-native';
@@ -14,6 +14,9 @@ export const LANGUAGES = [
   { id: 'telugu', label: '⚡ Telugu', color: '#10B981' },
   { id: 'hindi', label: '🇮🇳 Hindi', color: '#EAB308' },
   { id: 'english', label: '🌍 English', color: '#38BDF8' },
+  { id: 'malayalam', label: '🌴 Malayalam', color: '#14B8A6' },
+  { id: 'punjabi', label: '🪕 Punjabi', color: '#EC4899' },
+  { id: 'kannada', label: '👑 Kannada', color: '#8B5CF6' },
   { id: 'all', label: '🌐 All Languages', color: Colors.primary },
 ];
 

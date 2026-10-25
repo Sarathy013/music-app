@@ -8,6 +8,7 @@ import { musicAPI } from '../../services/api';
 import TrackCard from '../../components/TrackCard';
 import EmptyState from '../../components/EmptyState';
 import { usePlayer } from '../../store/PlayerContext';
+import { deduplicateTracks } from '../../utils/helpers';
 
 export default function ArtistScreen() {
   const { id } = useLocalSearchParams();
@@ -22,7 +23,7 @@ export default function ArtistScreen() {
     if (id) {
       musicAPI.getArtist(id).then((res) => {
         if (res?.artist) setArtist(res.artist);
-        if (res?.tracks) setTracks(res.tracks);
+        if (res?.tracks) setTracks(deduplicateTracks(res.tracks));
       }).catch(() => {}).finally(() => setLoading(false));
     }
   }, [id]);

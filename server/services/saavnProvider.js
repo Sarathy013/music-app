@@ -102,7 +102,76 @@ function formatTrack(raw) {
   };
 }
 
+function normalizeTrackTitle(title) {
+  if (!title) return '';
+  return String(title)
+    .toLowerCase()
+    .replace(/&amp;/g, '&')
+    .replace(/\s*[\(\[][^()\[\]]*(from|feat|ft\.|remix|version|audio|video|lyric|remaster|soundtrack|ost|original|bonus|edit|mix)[^()\[\]]*[\)\]]/gi, '')
+    .replace(/[-–—_]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeArtist(artist) {
+  if (!artist) return '';
+  return String(artist)
+    .toLowerCase()
+    .split(/,|&|feat|\/|;|with/i)[0]
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')[0] || '';
+}
+
+// Generate normalized tokens for track deduplication across various releases and IDs
+function getTrackDedupeTokens(track) {
+  if (!track || !track.title) return [];
+  const raw = String(track.title).toLowerCase();
+  const tokens = new Set();
+
+  const s = normalizeTrackTitle(track.title);
+  if (s) tokens.add(s);
+
+  const parts = raw.split(/\s*[-–—:|]\s*/).map(normalizeTrackTitle).filter(Boolean);
+  for (const part of parts) {
+    if (part && part.length >= 3) {
+      tokens.add(part);
+      const partWords = part.split(' ').filter(Boolean);
+      if (partWords.length > 0 && partWords[0].length >= 6) {
+        tokens.add(`single_${partWords[0]}`);
+      }
+      if (partWords.length >= 2) {
+        tokens.add(`pair_${partWords[0]}_${partWords[1]}`);
+      }
+    }
+  }
+
+  const words = (s || '').split(' ').filter(Boolean);
+  if (words.length > 0 && words[0].length >= 6) {
+    tokens.add(`single_${words[0]}`);
+  }
+  if (words.length >= 2) {
+    tokens.add(`pair_${words[0]}_${words[1]}`);
+  }
+
+  const art = normalizeArtist(track.artist);
+  if (art) {
+    if (s) tokens.add(`art_${s}_${art}`);
+    for (const part of parts) {
+      if (part && part.length >= 3) tokens.add(`art_${part}_${art}`);
+    }
+    if (words.length >= 1 && words[0].length >= 4) {
+      tokens.add(`leadart_${words[0]}_${art}`);
+    }
+  }
+
+  return Array.from(tokens);
+}
+
 const SaavnProvider = {
+  getTrackDedupeTokens,
   /**
    * Search single page from JioSaavn
    */
@@ -166,14 +235,19 @@ const SaavnProvider = {
     }
 
     const pages = await Promise.all(promises);
-    const seen = new Set();
+    const seenIds = new Set();
+    const seenKeys = new Set();
     const result = [];
     for (const list of pages) {
       for (const t of list) {
-        if (t && t.id && !seen.has(t.id)) {
-          seen.add(t.id);
-          result.push(t);
-        }
+        if (!t || !t.id || seenIds.has(t.id)) continue;
+        const tokens = getTrackDedupeTokens(t);
+        const isDup = tokens.some((tok) => seenKeys.has(tok));
+        if (isDup) continue;
+
+        tokens.forEach((tok) => seenKeys.add(tok));
+        seenIds.add(t.id);
+        result.push(t);
       }
     }
     return result.slice(0, limit);
@@ -375,6 +449,9 @@ const SaavnProvider = {
     else if (language === 'hindi') query = 'Top Hindi Songs';
     else if (language === 'english') query = 'Top Global English Hits';
     else if (language === 'telugu') query = 'Top Telugu Songs';
+    else if (language === 'malayalam') query = 'Top Malayalam Songs';
+    else if (language === 'punjabi') query = 'Top Punjabi Songs';
+    else if (language === 'kannada') query = 'Top Kannada Songs';
 
     return this.searchTracks(query, limit, 1, language);
   },
@@ -388,12 +465,15 @@ const SaavnProvider = {
     else if (language === 'hindi') query = 'Latest Hindi Songs 2024';
     else if (language === 'english') query = 'Latest English Pop 2024';
     else if (language === 'telugu') query = 'Latest Telugu Songs 2024';
+    else if (language === 'malayalam') query = 'Latest Malayalam Songs 2024';
+    else if (language === 'punjabi') query = 'Latest Punjabi Songs 2024';
+    else if (language === 'kannada') query = 'Latest Kannada Songs 2024';
 
     return this.searchTracks(query, limit, 1, language);
   },
 
   /**
-   * Curated language charts (Top Tamil, Top English, Top Hindi, Top Telugu)
+   * Curated language charts (Top Tamil, Top English, Top Hindi, Top Telugu, Top Malayalam, Top Punjabi, Top Kannada)
    */
   async getCharts(language = 'all') {
     const queries = {
@@ -401,9 +481,14 @@ const SaavnProvider = {
       english: ['Global Top 50', 'Today Top Hits English', 'Billboard Hot 100', 'Taylor Swift Hits'],
       hindi: ['Hindi Top 50', 'Arijit Singh Hits', 'Bollywood Romance Hits', 'Latest Hindi Hits'],
       telugu: ['Telugu Top 50', 'Tollywood Hits', 'Devi Sri Prasad Hits', 'Thaman S Hits', 'Latest Telugu Hits'],
+      malayalam: ['Malayalam Top 50', 'Sushin Shyam Hits', 'Aavesham Premalu Songs', 'Top Mollywood Hits'],
+      punjabi: ['Punjabi Top 50', 'Diljit Dosanjh Hits', 'Karan Aujla Hits', 'AP Dhillon Superhits'],
+      kannada: ['Kannada Top 50', 'KGF Kantara Songs', 'Ravi Basrur Hits', 'Sandalwood Hits'],
     };
 
-    const targetLangs = language === 'all' ? ['tamil', 'english', 'hindi', 'telugu'] : [language];
+    const targetLangs = language === 'all'
+      ? ['tamil', 'english', 'hindi', 'telugu', 'malayalam', 'punjabi', 'kannada']
+      : [language];
     const results = {};
 
     for (const lang of targetLangs) {
@@ -426,6 +511,14 @@ const SaavnProvider = {
         label: '🦁 Tamil (தமிழ்)',
         newQueries: [
           'Latest Tamil Songs 2024 Anirudh',
+          'Amaran Tamil Songs Sai Abhyankaar GV Prakash',
+          'Vettaiyan Manasilaayo Rajinikanth Anirudh',
+          'GOAT Greatest Of All Time Thalapathy Vijay Yuvan',
+          'Devara Tamil Chuttamalle Anirudh',
+          'Pushpa 2 The Rule Tamil Devi Sri Prasad',
+          'Aasa Kooda Sai Abhyankaar',
+          'Katchi Sera Sai Abhyankaar',
+          'Raayan Dhanush AR Rahman',
           'AR Rahman Tamil Superhits',
           'Top Kollywood Hits Vijay Ajith',
           'Tamil Dance Kuthu Hits',
@@ -445,6 +538,14 @@ const SaavnProvider = {
         name: 'English',
         label: '🌍 English (Global)',
         newQueries: [
+          'Espresso Sabrina Carpenter',
+          'Birds of a Feather Billie Eilish',
+          'Die With A Smile Lady Gaga Bruno Mars',
+          'Apt ROSE Bruno Mars',
+          'Beautiful Things Benson Boone',
+          'Good Luck Babe Chappell Roan',
+          'Lose Control Teddy Swims',
+          'Too Sweet Hozier',
           'Billboard Hot 100 Hits',
           'Today Top Hits Global Pop',
           'Taylor Swift The Weeknd Hits',
@@ -465,6 +566,12 @@ const SaavnProvider = {
         name: 'Hindi',
         label: '🇮🇳 Hindi (हिंदी)',
         newQueries: [
+          'Stree 2 Aaj Ki Raat Aayi Nai Sachin Jigar',
+          'Tauba Tauba Bad Newz Karan Aujla',
+          'Bhool Bhulaiyaa 3 Pitbull Diljit Dosanjh',
+          'Animal Arjan Vailly Satranga Ranbir Kapoor',
+          'Fighter Hrithik Roshan Vishal Shekhar',
+          'Dunki O Maahi Pritam Arijit',
           'Latest Bollywood Hits 2024',
           'Arijit Singh Romantic Hits',
           'Top Hindi Romantic Hits Pritam',
@@ -485,6 +592,13 @@ const SaavnProvider = {
         name: 'Telugu',
         label: '⚡ Telugu (తెలుగు)',
         newQueries: [
+          'Pushpa 2 The Rule Telugu DSP Allu Arjun',
+          'Devara Chuttamalle Fear Song Anirudh Jr NTR',
+          'Saripodhaa Sanivaaram Nani Jakes Bejoy',
+          'Kalki 2898 AD Santhosh Narayanan Prabhas',
+          'Guntur Kaaram Kurchi Madathapetti Thaman',
+          'HanuMan GowraHari',
+          'Tillu Square Radhika Ram Miriyala',
           'Telugu Latest Songs Tollywood 2024',
           'Devi Sri Prasad DSP Telugu Hits',
           'Thaman S Telugu Superhits',
@@ -501,14 +615,76 @@ const SaavnProvider = {
           'Keeravani Telugu Classic Melodies',
         ],
       },
+      malayalam: {
+        name: 'Malayalam',
+        label: '🌴 Malayalam (മലയാളം)',
+        newQueries: [
+          'Latest Malayalam Songs Aavesham Premalu',
+          'Sushin Shyam Malayalam Hits',
+          'Manjummel Boys Malayalam Hits',
+          'Hesham Abdul Wahab Hits',
+          'Top Mollywood Superhits 2024',
+          'Malayalam Melody Hits Jakes Bejoy',
+        ],
+        oldQueries: [
+          'Classic Malayalam Old 80s 90s Yesudas',
+          'Johnson Master Malayalam Classics',
+          'Evergreen Malayalam Hits Chithra',
+          'Devarajan Master Malayalam Hits',
+          'Old Malayalam Melodies MG Sreekumar',
+        ],
+      },
+      punjabi: {
+        name: 'Punjabi',
+        label: '🔥 Punjabi (ਪੰਜਾਬੀ)',
+        newQueries: [
+          'Latest Punjabi Hits 2024 Karan Aujla',
+          'Diljit Dosanjh Punjabi Superhits',
+          'AP Dhillon Shubh Punjabi Hits',
+          'Sidhu Moose Wala Hits',
+          'Punjabi Party Hits B Praak',
+          'Trending Punjabi Songs 2024',
+        ],
+        oldQueries: [
+          'Classic Punjabi Folk Hits Gurdas Maan',
+          'Kuldeep Manak Evergreen Punjabi',
+          'Old Punjabi Classics Surinder Kaur',
+          '90s Punjabi Pop Daler Mehndi',
+          'Bally Sagoo Punjabi Classics',
+        ],
+      },
+      kannada: {
+        name: 'Kannada',
+        label: '👑 Kannada (ಕನ್ನಡ)',
+        newQueries: [
+          'Latest Kannada Songs Sandalwood 2024',
+          'KGF Kantara Kannada Hits',
+          'Ravi Basrur Kannada Superhits',
+          'Sanjith Hegde Kannada Melodies',
+          'Arjun Janya Kannada Hits',
+          'Charan Raj Sandalwood Hits',
+        ],
+        oldQueries: [
+          'Dr Rajkumar Golden Kannada Hits',
+          'SPB Kannada Classics Ilaiyaraaja',
+          'PB Sreenivas Classic Kannada',
+          'Evergreen Kannada 80s 90s Hamsalekha',
+          'C Ashwath Kannada Classics',
+        ],
+      },
     };
 
     const dedupList = (list) => {
-      const seen = new Set();
+      const seenIds = new Set();
+      const seenKeys = new Set();
       return (list || []).filter((t) => {
-        if (!t || !t.id) return false;
-        if (seen.has(t.id)) return false;
-        seen.add(t.id);
+        if (!t || !t.id || seenIds.has(t.id)) return false;
+        const tokens = getTrackDedupeTokens(t);
+        const isDup = tokens.some((tok) => seenKeys.has(tok));
+        if (isDup) return false;
+
+        tokens.forEach((tok) => seenKeys.add(tok));
+        seenIds.add(t.id);
         return true;
       });
     };

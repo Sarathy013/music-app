@@ -16,12 +16,16 @@ const JamendoProvider = require('./jamendoProvider');
 const MusopenProvider = require('./musicProvider');
 
 function dedup(tracks) {
-  const seen = new Set();
-  return tracks.filter((t) => {
-    if (!t || !t.title) return false;
-    const key = `${t.title.toLowerCase().trim()}-${(t.artist || '').toLowerCase().trim()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
+  const seenIds = new Set();
+  const seenTokens = new Set();
+  return (tracks || []).filter((t) => {
+    if (!t || !t.title || !t.id || seenIds.has(t.id)) return false;
+    const tokens = typeof SaavnProvider.getTrackDedupeTokens === 'function' ? SaavnProvider.getTrackDedupeTokens(t) : [];
+    const isDup = tokens.some((tok) => seenTokens.has(tok));
+    if (isDup) return false;
+
+    tokens.forEach((tok) => seenTokens.add(tok));
+    seenIds.add(t.id);
     return true;
   });
 }
@@ -248,7 +252,7 @@ const MusicAggregator = {
    * Retrieve tracks by genre
    */
   async getTracksByGenre(genre, limit = 20) {
-    if (['tamil', 'hindi', 'english', 'telugu', 'bollywood', 'kollywood', 'tollywood'].includes(genre.toLowerCase())) {
+    if (['tamil', 'hindi', 'english', 'telugu', 'malayalam', 'punjabi', 'kannada', 'bollywood', 'kollywood', 'tollywood', 'mollywood', 'sandalwood'].includes(genre.toLowerCase())) {
       return SaavnProvider.searchTracks(genre, limit, 1, genre);
     }
     return JamendoProvider.getTracksByGenre(genre, limit);
@@ -263,6 +267,9 @@ const MusicAggregator = {
       { id: 'telugu', name: '⚡ Telugu Hits', color: '#10B981', language: 'telugu' },
       { id: 'hindi', name: '🇮🇳 Bollywood & Hindi', color: '#EAB308', language: 'hindi' },
       { id: 'english', name: '🌍 Global English', color: '#38BDF8', language: 'english' },
+      { id: 'malayalam', name: '🌴 Malayalam Hits', color: '#14B8A6', language: 'malayalam' },
+      { id: 'punjabi', name: '🪕 Punjabi Hits', color: '#EC4899', language: 'punjabi' },
+      { id: 'kannada', name: '👑 Kannada Hits', color: '#8B5CF6', language: 'kannada' },
       { id: 'pop', name: 'Pop Hits', color: '#F472B6', source: 'saavn' },
       { id: 'hiphop', name: 'Hip-Hop & Rap', color: '#8B5CF6', source: 'saavn' },
       { id: 'rock', name: 'Rock & Indie', color: '#EC4899', source: 'saavn' },

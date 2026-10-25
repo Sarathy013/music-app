@@ -12,6 +12,7 @@ import { musicAPI } from '../../services/api';
 import { STORAGE_KEYS } from '../../constants/config';
 import TrackCard from '../../components/TrackCard';
 import EmptyState from '../../components/EmptyState';
+import { deduplicateTracks, getTrackDedupeKey, getTrackDedupeTokens } from '../../utils/helpers';
 
 const { width } = Dimensions.get('window');
 
@@ -33,6 +34,9 @@ const LANGUAGE_FILTERS = [
   { id: 'telugu', label: '⚡ Telugu', language: 'telugu', source: 'saavn', color: '#10B981' },
   { id: 'hindi', label: '🇮🇳 Hindi', language: 'hindi', source: 'saavn', color: '#EAB308' },
   { id: 'english', label: '🌍 English', language: 'english', source: 'saavn', color: '#38BDF8' },
+  { id: 'malayalam', label: '🌴 Malayalam', language: 'malayalam', source: 'saavn', color: '#14B8A6' },
+  { id: 'punjabi', label: '🪕 Punjabi', language: 'punjabi', source: 'saavn', color: '#EC4899' },
+  { id: 'kannada', label: '👑 Kannada', language: 'kannada', source: 'saavn', color: '#8B5CF6' },
   { id: 'youtube', label: '▶ YouTube', language: 'all', source: 'youtube', color: '#EF4444' },
   { id: 'spotify', label: '🟢 Spotify', language: 'all', source: 'spotify', color: '#10B981' },
 ];
@@ -42,6 +46,9 @@ const QUICK_TRENDING_TAGS = [
   { text: '⚡ DSP Telugu Hits', query: 'Devi Sri Prasad Hits', lang: 'telugu' },
   { text: '🎶 AR Rahman', query: 'A.R. Rahman', lang: 'tamil' },
   { text: '🎤 Arijit Singh', query: 'Arijit Singh', lang: 'hindi' },
+  { text: '🌴 Sushin Shyam', query: 'Sushin Shyam Malayalam', lang: 'malayalam' },
+  { text: '🪕 Diljit Dosanjh', query: 'Diljit Dosanjh Punjabi Hits', lang: 'punjabi' },
+  { text: '👑 Ravi Basrur', query: 'Ravi Basrur Kannada KGF', lang: 'kannada' },
   { text: '🎵 Thaman S', query: 'Thaman S Telugu', lang: 'telugu' },
   { text: '🌟 Taylor Swift', query: 'Taylor Swift', lang: 'english' },
   { text: '🔥 Naa Ready', query: 'Naa Ready Leo', lang: 'tamil' },
@@ -52,6 +59,7 @@ const QUICK_TRENDING_TAGS = [
 
 const GENRE_COLORS = {
   tamil: '#F97316', telugu: '#10B981', hindi: '#EAB308', english: '#38BDF8',
+  malayalam: '#14B8A6', punjabi: '#EC4899', kannada: '#8B5CF6',
   pop: '#F472B6', rock: '#EF4444', electronic: '#06B6D4', hiphop: '#F59E0B',
   jazz: '#8B5CF6', classical: '#10B981', ambient: '#3B82F6', folk: '#D97706',
   metal: '#6B7280', rnb: '#EC4899', acoustic: '#84CC16',
@@ -62,6 +70,9 @@ const QUICK_GENRES = [
   { id: 'telugu', name: '⚡ Telugu Hits' },
   { id: 'hindi', name: '🇮🇳 Hindi Hits' },
   { id: 'english', name: '🌍 English Pop' },
+  { id: 'malayalam', name: '🌴 Malayalam Hits' },
+  { id: 'punjabi', name: '🪕 Punjabi Hits' },
+  { id: 'kannada', name: '👑 Kannada Hits' },
   { id: 'pop', name: 'Pop Hits' },
   { id: 'hiphop', name: 'Hip-Hop' },
   { id: 'rock', name: 'Rock' },
@@ -76,6 +87,9 @@ const SEARCH_SEED_QUERIES = {
   telugu: ['Telugu Tollywood Hits DSP', 'Thaman S Telugu Superhits', 'SPB Telugu Golden Classics', 'Sid Sriram Telugu Melodies', 'Allu Arjun Mahesh Hits', 'Telugu Cinema Hits'],
   hindi: ['Bollywood Hits 2024 Arijit', 'Kishore Kumar Lata 70s 80s', '90s Evergreen Bollywood Hits', 'Pritam Bollywood Hits', 'Sonu Nigam KK Hits', 'Bollywood Dance Party'],
   english: ['Billboard Hot 100 Hits', 'Today Top Hits Global Pop', 'Taylor Swift The Weeknd Hits', 'Classic 80s 90s Rock Pop', 'Ed Sheeran Acoustic Hits', 'Global Dance Pop EDM'],
+  malayalam: ['Malayalam Superhits Sushin Shyam', 'Aavesham Manjummel Boys Hits', 'Mohanlal Mammootty Evergreen Hits', 'Vineeth Sreenivasan Melodies', 'Malayalam Cinema 2024'],
+  punjabi: ['Punjabi Hits Diljit Dosanjh', 'Sidhu Moosewala Superhits', 'AP Dhillon Karan Aujla Punjabi', 'Bhangra Dance Party Hits', 'Punjabi Pop Top 50'],
+  kannada: ['Kannada Superhits Ravi Basrur', 'KGF Kantara Kannada Hits', 'Dr Rajkumar Puneeth Hits', 'Sonu Nigam Kannada Melodies', 'Kannada Top 50 Chartbusters'],
 };
 
 export default function SearchScreen() {
@@ -105,6 +119,9 @@ export default function SearchScreen() {
     if (filterId === 'telugu') return 'All Telugu Songs Tollywood DSP Thaman';
     if (filterId === 'hindi') return 'All Hindi Bollywood Songs Arijit Singh';
     if (filterId === 'english') return 'All Global English Pop Songs';
+    if (filterId === 'malayalam') return 'All Malayalam Songs Sushin Shyam';
+    if (filterId === 'punjabi') return 'All Punjabi Songs Diljit Dosanjh';
+    if (filterId === 'kannada') return 'All Kannada Songs Ravi Basrur KGF';
     return '';
   };
 
@@ -181,8 +198,13 @@ export default function SearchScreen() {
           setHasMore(false);
         } else {
           setResults((prev) => {
-            const seen = new Set(prev.map((t) => t.id));
-            const additions = found.filter((t) => t && t.id && !seen.has(t.id));
+            const currentKeys = new Set();
+            const currentIds = new Set();
+            prev.forEach((t) => {
+              if (t?.id) currentIds.add(t.id);
+              getTrackDedupeTokens(t).forEach((tok) => currentKeys.add(tok));
+            });
+            const additions = type === 'tracks' ? deduplicateTracks(found, currentKeys, currentIds) : found.filter((t) => t && t.id && !currentIds.has(t.id));
             if (additions.length === 0) {
               setHasMore(false);
               return prev;
@@ -193,13 +215,7 @@ export default function SearchScreen() {
           setResultCount((prev) => prev + found.length);
         }
       } else {
-        const seen = new Set();
-        const unique = found.filter((t) => {
-          if (!t || !t.id) return false;
-          if (seen.has(t.id)) return false;
-          seen.add(t.id);
-          return true;
-        });
+        const unique = type === 'tracks' ? deduplicateTracks(found) : found;
         setResults(unique);
         setResultCount(unique.length);
         if (q.trim().length > 1 && !q.startsWith('http') && !q.startsWith('All ') && !q.startsWith('Top ')) {
@@ -245,8 +261,15 @@ export default function SearchScreen() {
 
       if (newItems.length > 0) {
         setResults((prev) => {
-          const seen = new Set(prev.map((t) => t.id));
-          const additions = newItems.filter((t) => t && t.id && !seen.has(t.id));
+          const currentKeys = new Set();
+          const currentIds = new Set();
+          prev.forEach((t) => {
+            if (t?.id) currentIds.add(t.id);
+            getTrackDedupeTokens(t).forEach((tok) => currentKeys.add(tok));
+          });
+          const additions = activeTab === 'tracks'
+            ? deduplicateTracks(newItems, currentKeys, currentIds)
+            : newItems.filter((t) => t && t.id && !currentIds.has(t.id));
           return [...prev, ...additions];
         });
         setResultCount((prev) => prev + newItems.length);

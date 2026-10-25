@@ -97,17 +97,20 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
         with:
-          tag_name: v2.0.0-apk
-          name: "VibeStream v2.0.0 Standalone APK"
+          tag_name: v2.1.0-apk
+          name: "VibeStream v2.1.0 Standalone APK"
+          make_latest: true
           body: |
-            ### 🎵 VibeStream Standalone Android APK
+            ### 🎵 VibeStream Standalone Android APK (v2.1.0)
             
             Download and install `VibeStream.apk` directly on any Android phone (no Expo Go needed)!
             
-            - **All Music Streaming**: JioSaavn 320kbps + YouTube Music + Jamendo
+            - **New Minimalist Logo**: High-contrast soundwave branding across all icons, mipmaps, and splash screen
+            - **Zero Duplicate Songs**: Advanced token-based deduplication across all screens, languages, and queues
+            - **All Languages Supported**: Tamil, Telugu, Hindi, English, Malayalam, Punjabi, and Kannada
+            - **Worldwide Streaming**: High-bitrate 320kbps streams + YouTube Music + Jamendo
             - **Background Audio**: Lock-screen media controls & persistent playback
-            - **Synced Lyrics**: Spotify-style animated lyric tracking
-            - **Offline Downloads**: Save tracks to your phone
+            - **Synced Lyrics & Offline Downloads**: Real-time lyric synchronization and local storage
           files: build-output/VibeStream.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

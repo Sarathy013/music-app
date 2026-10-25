@@ -147,10 +147,15 @@ const store = {
 
   addToHistory(userId, track) {
     const db = readDB();
+    const trackId = String(track.trackId || track.id);
+    // Remove previous entry of the same track to prevent repeated songs in history
+    db.history = db.history.filter(
+      (h) => !(h.user === userId && (String(h.trackId) === trackId || (h.title?.toLowerCase() === track.title?.toLowerCase() && h.artist?.toLowerCase() === track.artist?.toLowerCase())))
+    );
     const entry = {
       _id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       user: userId,
-      trackId: String(track.trackId || track.id),
+      trackId,
       title: track.title,
       artist: track.artist,
       album: track.album || null,
@@ -226,7 +231,9 @@ const store = {
     const pl = db.playlists.find((p) => p._id === playlistId && p.user === userId);
     if (!pl) throw new Error('Playlist not found');
     const trackId = String(track.trackId || track.id);
-    const exists = pl.tracks.find((t) => String(t.trackId) === trackId);
+    const exists = pl.tracks.find(
+      (t) => String(t.trackId) === trackId || (t.title?.toLowerCase() === track.title?.toLowerCase() && t.artist?.toLowerCase() === track.artist?.toLowerCase())
+    );
     if (exists) throw new Error('Track already in playlist');
     pl.tracks.push({
       trackId,
