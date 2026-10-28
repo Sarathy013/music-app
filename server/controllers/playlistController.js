@@ -77,20 +77,49 @@ exports.deletePlaylist = async (req, res, next) => {
 // POST /api/playlists/:id/tracks
 exports.addTrack = async (req, res, next) => {
   try {
-    const { trackId, title, artist, album, duration, artworkUrl, streamUrl } = req.body;
+    const isBatch = Array.isArray(req.body.tracks);
+    const tracksToAdd = isBatch ? req.body.tracks : [req.body];
+
     if (isDbConnected()) {
       const playlist = await Playlist.findOne({ _id: req.params.id, user: req.user._id });
       if (!playlist) return res.status(404).json({ success: false, message: 'Playlist not found.' });
 
-      const exists = playlist.tracks.find((t) => t.trackId === trackId);
-      if (exists) return res.status(400).json({ success: false, message: 'Track already in playlist.' });
+      let addedCount = 0;
+      for (const t of tracksToAdd) {
+        if (!t || (!t.trackId && !t.id)) continue;
+        const tid = String(t.trackId || t.id);
+        const exists = playlist.tracks.find(
+          (item) => String(item.trackId) === tid || (item.title?.toLowerCase() === t.title?.toLowerCase() && item.artist?.toLowerCase() === t.artist?.toLowerCase())
+        );
+        if (!exists) {
+          playlist.tracks.push({
+            trackId: tid,
+            title: t.title || 'Unknown Title',
+            artist: t.artist || '',
+            album: t.album || '',
+            duration: t.duration || 0,
+            artworkUrl: t.artworkUrl || '',
+            streamUrl: t.streamUrl || '',
+            position: playlist.tracks.length,
+          });
+          addedCount++;
+        }
+      }
 
-      playlist.tracks.push({ trackId, title, artist, album, duration, artworkUrl, streamUrl, position: playlist.tracks.length });
+      if (!isBatch && addedCount === 0) {
+        return res.status(400).json({ success: false, message: 'Track already in playlist.' });
+      }
+
       await playlist.save();
+      return res.json({ success: true, playlist, addedCount });
+    }
+
+    if (isBatch) {
+      const playlist = store.addTracksToPlaylist(req.user._id, req.params.id, tracksToAdd);
       return res.json({ success: true, playlist });
     }
 
-    const playlist = store.addTrackToPlaylist(req.user._id, req.params.id, { trackId, title, artist, album, duration, artworkUrl, streamUrl });
+    const playlist = store.addTrackToPlaylist(req.user._id, req.params.id, req.body);
     res.json({ success: true, playlist });
   } catch (err) {
     if (err.message === 'Track already in playlist') {

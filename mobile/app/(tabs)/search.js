@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ScrollView,
   ActivityIndicator, Animated, Image, Dimensions,
@@ -7,12 +7,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { musicAPI } from '../../services/api';
 import { STORAGE_KEYS } from '../../constants/config';
 import TrackCard from '../../components/TrackCard';
 import EmptyState from '../../components/EmptyState';
-import { deduplicateTracks, getTrackDedupeKey, getTrackDedupeTokens } from '../../utils/helpers';
+import { deduplicateTracks, getTrackDedupeTokens } from '../../utils/helpers';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +37,8 @@ const LANGUAGE_FILTERS = [
   { id: 'malayalam', label: '🌴 Malayalam', language: 'malayalam', source: 'saavn', color: '#14B8A6' },
   { id: 'punjabi', label: '🪕 Punjabi', language: 'punjabi', source: 'saavn', color: '#EC4899' },
   { id: 'kannada', label: '👑 Kannada', language: 'kannada', source: 'saavn', color: '#8B5CF6' },
+  { id: 'jamendo', label: '🎸 Jamendo', language: 'all', source: 'jamendo', color: Colors.teal },
+  { id: 'musopen', label: '🎼 Classical', language: 'all', source: 'musopen', color: Colors.primaryLight },
   { id: 'youtube', label: '▶ YouTube', language: 'all', source: 'youtube', color: '#EF4444' },
   { id: 'spotify', label: '🟢 Spotify', language: 'all', source: 'spotify', color: '#10B981' },
 ];
@@ -107,11 +109,10 @@ export default function SearchScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [searched, setSearched] = useState(!!params.genre);
-  const [resultCount, setResultCount] = useState(0);
-  const [isUrlDetected, setIsUrlDetected] = useState(false);
+  const isUrlDetected = query.includes('youtube.com') || query.includes('youtu.be') || query.includes('spotify.com');
 
   const debouncedQuery = useDebounce(query, 350);
-  const inputFocused = useRef(new Animated.Value(0)).current;
+  const [inputFocused] = useState(() => new Animated.Value(0));
 
   const getEffectiveQuery = (rawQuery, filterId) => {
     if (rawQuery && rawQuery.trim().length >= 2) return rawQuery.trim();
@@ -131,29 +132,28 @@ export default function SearchScreen() {
     if (params.genre && params.genreName) {
       performSearch(params.genreName || params.genre, activeTab, activeFilter, false, 1);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Run when route genre changes; current tab/filter are current.
   }, [params.genre]);
 
   useEffect(() => {
     // Detect YouTube or Spotify URL
-    const isYt = query.includes('youtube.com') || query.includes('youtu.be');
-    const isSp = query.includes('spotify.com');
-    setIsUrlDetected(isYt || isSp);
-
     const effectiveQ = getEffectiveQuery(debouncedQuery, activeFilter);
     if (effectiveQ) {
       performSearch(effectiveQ, activeTab, activeFilter, false, 1);
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear results for an empty query.
       setResults([]);
       setSearched(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Inputs determine when a search is refreshed.
   }, [debouncedQuery, activeTab, activeFilter]);
 
-  const loadHistory = async () => {
+  async function loadHistory() {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
       if (stored) setHistory(JSON.parse(stored));
     } catch {}
-  };
+  }
 
   const saveToHistory = async (q) => {
     try {
@@ -168,7 +168,7 @@ export default function SearchScreen() {
     await AsyncStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
   };
 
-  const performSearch = async (q, type, filterId, isLoadMore = false, pageNum = 1) => {
+  async function performSearch(q, type, filterId, isLoadMore = false, pageNum = 1) {
     if (!q || !q.trim()) return;
 
     if (isLoadMore) {
@@ -212,12 +212,10 @@ export default function SearchScreen() {
             return [...prev, ...additions];
           });
           setPage(pageNum);
-          setResultCount((prev) => prev + found.length);
         }
       } else {
         const unique = type === 'tracks' ? deduplicateTracks(found) : found;
         setResults(unique);
-        setResultCount(unique.length);
         if (q.trim().length > 1 && !q.startsWith('http') && !q.startsWith('All ') && !q.startsWith('Top ')) {
           saveToHistory(q.trim());
         }
@@ -228,7 +226,7 @@ export default function SearchScreen() {
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }
 
   const handleLoadMore = () => {
     if (loadingMore || loading || !hasMore || results.length === 0) return;
@@ -272,7 +270,6 @@ export default function SearchScreen() {
             : newItems.filter((t) => t && t.id && !currentIds.has(t.id));
           return [...prev, ...additions];
         });
-        setResultCount((prev) => prev + newItems.length);
       }
     } catch (e) {
       console.warn('Boost songs error:', e.message);

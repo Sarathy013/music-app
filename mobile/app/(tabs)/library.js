@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Modal, TextInput,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Modal, TextInput, ScrollView, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
-import { playlistAPI, favoritesAPI, historyAPI } from '../../services/api';
+import { playlistAPI, favoritesAPI, historyAPI, musicAPI } from '../../services/api';
 import TrackCard from '../../components/TrackCard';
 import EmptyState from '../../components/EmptyState';
 import { usePlayer } from '../../store/PlayerContext';
@@ -13,12 +13,14 @@ import { getDownloadedTracks } from '../../utils/downloader';
 import { showAlert } from '../../utils/alert';
 import { deduplicateTracks } from '../../utils/helpers';
 
-const TABS = ['playlists', 'favorites', 'downloads', 'history'];
+const TABS = ['playlists', 'favorites', 'artists', 'albums', 'downloads', 'history'];
 
 export default function LibraryScreen() {
   const [activeTab, setActiveTab] = useState('playlists');
   const [playlists, setPlaylists] = useState([]);
   const [favorites, setFavorites] = useState([]);
+  const [artists, setArtists] = useState([]);
+  const [albums, setAlbums] = useState([]);
   const [downloads, setDownloads] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,11 +32,13 @@ export default function LibraryScreen() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [pl, fav, hist, down] = await Promise.allSettled([
+      const [pl, fav, hist, down, art, alb] = await Promise.allSettled([
         playlistAPI.getAll(),
         favoritesAPI.getAll(),
         historyAPI.getAll(30),
         getDownloadedTracks(),
+        musicAPI.getPopularArtists(20),
+        musicAPI.getPopularAlbums(20),
       ]);
       if (pl.status === 'fulfilled') setPlaylists(pl.value?.playlists || []);
       if (fav.status === 'fulfilled') {
@@ -46,11 +50,16 @@ export default function LibraryScreen() {
         setHistory(deduplicateTracks(rawHist));
       }
       if (down.status === 'fulfilled') setDownloads(down.value || []);
+      if (art.status === 'fulfilled') setArtists(art.value?.artists || []);
+      if (alb.status === 'fulfilled') setAlbums(alb.value?.albums || []);
     } catch {}
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Load library sections asynchronously on mount.
+    fetchAll();
+  }, [fetchAll]);
 
   const createPlaylist = async () => {
     if (!newName.trim()) return;
@@ -100,6 +109,48 @@ export default function LibraryScreen() {
     return <TrackCard track={formatted} queue={queue} index={index} />;
   };
 
+  const renderArtist = ({ item }) => (
+    <TouchableOpacity
+      style={styles.listRow}
+      onPress={() => router.push(`/artist/${item.id}`)}
+      activeOpacity={0.75}
+    >
+      {item.artworkUrl || item.imageUrl ? (
+        <Image source={{ uri: item.artworkUrl || item.imageUrl }} style={styles.avatarImg} />
+      ) : (
+        <View style={styles.avatarFallback}>
+          <Text style={styles.avatarFallbackText}>{item.name?.[0] || 'A'}</Text>
+        </View>
+      )}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowTitle}>{item.name}</Text>
+        <Text style={styles.rowSub}>{item.role || 'Artist'}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+    </TouchableOpacity>
+  );
+
+  const renderAlbum = ({ item }) => (
+    <TouchableOpacity
+      style={styles.listRow}
+      onPress={() => router.push(`/album/${item.id}`)}
+      activeOpacity={0.75}
+    >
+      {item.artworkUrl ? (
+        <Image source={{ uri: item.artworkUrl }} style={styles.albumImg} />
+      ) : (
+        <View style={styles.albumFallback}>
+          <Ionicons name="albums" size={22} color={Colors.primaryLight} />
+        </View>
+      )}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowTitle}>{item.name || item.title}</Text>
+        <Text style={styles.rowSub}>{item.artist || 'Various Artists'}{item.year ? ` · ${item.year}` : ''}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+    </TouchableOpacity>
+  );
+
   const renderDownload = ({ item, index }) => {
     const stream = item.localUri || item.streamUrl;
     const formatted = { ...item, streamUrl: stream };
@@ -128,6 +179,10 @@ export default function LibraryScreen() {
       ? playlists
       : activeTab === 'favorites'
       ? favorites
+      : activeTab === 'artists'
+      ? artists
+      : activeTab === 'albums'
+      ? albums
       : activeTab === 'downloads'
       ? downloads
       : history;
@@ -137,6 +192,10 @@ export default function LibraryScreen() {
       ? renderPlaylist
       : activeTab === 'favorites'
       ? renderFavorite
+      : activeTab === 'artists'
+      ? renderArtist
+      : activeTab === 'albums'
+      ? renderAlbum
       : activeTab === 'downloads'
       ? renderDownload
       : renderHistory;
@@ -159,24 +218,34 @@ export default function LibraryScreen() {
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabs}>
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
-              {tab === 'playlists'
-                ? 'Playlists'
-                : tab === 'favorites'
-                ? '❤️ Liked'
-                : tab === 'downloads'
-                ? '⬇️ Offline'
-                : '🕓 History'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.tabsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabs}
+        >
+          {TABS.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
+                {tab === 'playlists'
+                  ? 'Playlists'
+                  : tab === 'favorites'
+                  ? '❤️ Liked'
+                  : tab === 'artists'
+                  ? '🎤 Artists'
+                  : tab === 'albums'
+                  ? '💿 Albums'
+                  : tab === 'downloads'
+                  ? '⬇️ Offline'
+                  : '🕓 History'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {/* List */}
@@ -194,6 +263,10 @@ export default function LibraryScreen() {
                   ? 'musical-notes'
                   : activeTab === 'favorites'
                   ? 'heart'
+                  : activeTab === 'artists'
+                  ? 'people'
+                  : activeTab === 'albums'
+                  ? 'albums'
                   : activeTab === 'downloads'
                   ? 'cloud-download-outline'
                   : 'time'
@@ -203,6 +276,10 @@ export default function LibraryScreen() {
                   ? 'No playlists yet'
                   : activeTab === 'favorites'
                   ? 'No liked tracks'
+                  : activeTab === 'artists'
+                  ? 'No artists found'
+                  : activeTab === 'albums'
+                  ? 'No albums found'
                   : activeTab === 'downloads'
                   ? 'No downloaded tracks'
                   : 'No history yet'
@@ -212,7 +289,7 @@ export default function LibraryScreen() {
                   ? 'Tap + to create your first playlist.'
                   : activeTab === 'downloads'
                   ? 'Tap the download button on any song to save it for offline listening.'
-                  : 'Start listening to build your library.'
+                  : 'Explore music to build your collection.'
               }
               actionLabel={activeTab === 'playlists' ? 'Create Playlist' : undefined}
               onAction={activeTab === 'playlists' ? () => setShowNewPlaylist(true) : undefined}
@@ -265,11 +342,13 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.xxl,
     color: Colors.textPrimary,
   },
+  tabsContainer: {
+    marginBottom: Spacing.md,
+  },
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.base,
     gap: Spacing.xs,
-    marginBottom: Spacing.md,
   },
   tab: {
     paddingVertical: 7,
@@ -297,6 +376,41 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+  },
+  avatarImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.bgElevated,
+  },
+  avatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  avatarFallbackText: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.base,
+    color: Colors.primaryLight,
+  },
+  albumImg: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgElevated,
+  },
+  albumFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   playlistIcon: {
     width: 48,

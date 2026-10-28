@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity,
-  FlatList, Animated, Image,
+  View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, ActivityIndicator,
+  Animated, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { musicAPI } from '../../services/api';
 import { useAuth } from '../../store/AuthContext';
 import { usePlayer } from '../../store/PlayerContext';
@@ -15,7 +16,7 @@ import AlbumCard from '../../components/AlbumCard';
 import SectionHeader from '../../components/SectionHeader';
 import { TrackSkeleton, AlbumCardSkeleton } from '../../components/SkeletonLoader';
 import TasteOnboardingModal, { getUserPreferences, MOODS } from '../../components/TasteOnboardingModal';
-import { deduplicateTracks, getTrackDedupeKey, getTrackDedupeTokens } from '../../utils/helpers';
+import { deduplicateTracks, getTrackDedupeTokens } from '../../utils/helpers';
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -37,7 +38,7 @@ const HOME_LANGUAGES = [
   { id: 'kannada', label: '👑 Kannada Hits', color: '#8B5CF6' },
 ];
 
-function ArtistChip({ artist, onPress }) {
+const ArtistChip = React.memo(function ArtistChip({ artist, onPress }) {
   const artwork = artist.artworkUrl || artist.imageUrl;
   return (
     <TouchableOpacity style={styles.artistCard} onPress={() => onPress(artist)} activeOpacity={0.8}>
@@ -57,7 +58,10 @@ function ArtistChip({ artist, onPress }) {
       {artist.role && <Text style={styles.artistEra}>{artist.role}</Text>}
     </TouchableOpacity>
   );
-}
+});
+
+// In-memory cache for instant tab/language switching with zero lag
+const homeDataCache = {};
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -66,6 +70,7 @@ export default function HomeScreen() {
 
   const [selectedLang, setSelectedLang] = useState('all');
   const [trending, setTrending] = useState([]);
+  const [popularAlbums, setPopularAlbums] = useState([]);
   const [tamilHits, setTamilHits] = useState([]);
   const [tamilClassics, setTamilClassics] = useState([]);
   const [teluguHits, setTeluguHits] = useState([]);
@@ -79,33 +84,59 @@ export default function HomeScreen() {
   const [artists, setArtists] = useState([]);
   
   // Personalized Recommendations based on User's Taste Questionnaire
-  const [recommendedTracks, setRecommendedTracks] = useState([]);
-  const [userTaste, setUserTaste] = useState(null);
+  const [, setRecommendedTracks] = useState([]);
   const [showTasteModal, setShowTasteModal] = useState(false);
 
-  // Extended Songs Feed with Pagination
-  const [feedTracks, setFeedTracks] = useState([]);
-  const [feedPage, setFeedPage] = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  // Interactive Mood Recommendations (Sad, Love, Happy, Chill, Party, Workout, Rain, Devotional, Mix)
+  const [activeMood, setActiveMood] = useState('romantic');
+  const [moodTracks, setMoodTracks] = useState([]);
+  const [moodLoading, setMoodLoading] = useState(false);
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Check if onboarding questionnaire has been completed by user
+  // Restore saved active mood on mount
   useEffect(() => {
-    getUserPreferences().then((pref) => {
-      if (pref) {
-        setUserTaste(pref);
-        fetchPersonalizedRecommendations(pref);
-      } else {
-        // Show questionnaire modal automatically for user
-        setShowTasteModal(true);
-      }
+    AsyncStorage.getItem('@vibestream_user_active_mood').then((saved) => {
+      if (saved) setActiveMood(saved);
     });
-  }, [user]);
+  }, []);
 
-  const fetchPersonalizedRecommendations = async (pref) => {
+  const fetchMoodRecommendations = useCallback(async (moodId, langId) => {
+    setMoodLoading(true);
+    try {
+      let list = [];
+      try {
+        const res = await musicAPI.getMoodRecommendations(moodId, langId, 30);
+        if (res?.tracks?.length) {
+          list = res.tracks;
+        }
+      } catch {}
+
+      if (!list.length) {
+        const moodObj = MOODS.find((m) => m.id === moodId) || MOODS[0];
+        const langPrefix = langId && langId !== 'all' ? `${langId} ` : '';
+        const searchRes = await musicAPI.search(`${langPrefix}${moodObj.query}`, 'tracks', 30, 1, langId, 'saavn');
+        list = searchRes?.results || [];
+      }
+
+      const unique = deduplicateTracks(list);
+      setMoodTracks(unique);
+    } catch (e) {
+      console.warn('Mood fetch error:', e.message);
+    } finally {
+      setMoodLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Start async recommendations for this mood.
+    fetchMoodRecommendations(activeMood, selectedLang);
+  }, [activeMood, selectedLang, fetchMoodRecommendations]);
+
+  const handleMoodSelect = (moodId) => {
+    setActiveMood(moodId);
+    AsyncStorage.setItem('@vibestream_user_active_mood', moodId).catch(() => {});
+  };
+
+  const fetchPersonalizedRecommendations = useCallback(async (pref) => {
     if (!pref) return;
     try {
       const langs = pref.languages || ['all'];
@@ -122,17 +153,78 @@ export default function HomeScreen() {
         if (t?.id) trendIds.add(t.id);
         getTrackDedupeTokens(t).forEach((tok) => trendKeys.add(tok));
       });
-      const unique = deduplicateTracks(list, trendKeys, trendIds);
-      setRecommendedTracks(unique);
+      setRecommendedTracks(deduplicateTracks(list, trendKeys, trendIds));
     } catch {}
-  };
+  }, [trending]);
 
-  const scrollY = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    getUserPreferences().then((pref) => {
+      if (pref) {
+        fetchPersonalizedRecommendations(pref);
+      } else {
+        setShowTasteModal(true);
+      }
+    });
+  }, [user, fetchPersonalizedRecommendations]);
+
+  // Extended Songs Feed with Windowing for Silk-Smooth Scrolling
+  const [feedTracks, setFeedTracks] = useState([]);
+  const [feedPage, setFeedPage] = useState(1);
+  const [visibleFeedCount, setVisibleFeedCount] = useState(25);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  const [loading, setLoading] = useState(!homeDataCache[selectedLang]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Restore cache on launch for 0ms instant display
+  useEffect(() => {
+    AsyncStorage.getItem('@vibestream_home_cache').then((raw) => {
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          Object.assign(homeDataCache, parsed);
+          if (parsed[selectedLang] && !trending.length) {
+            const c = parsed[selectedLang];
+            setTrending(c.trending || []);
+            setPopularAlbums(c.popularAlbums || []);
+            setArtists(c.artists || []);
+            setTamilHits(c.tamilHits || []);
+            setTamilClassics(c.tamilClassics || []);
+            setTeluguHits(c.teluguHits || []);
+            setTeluguClassics(c.teluguClassics || []);
+            setHindiHits(c.hindiHits || []);
+            setHindiClassics(c.hindiClassics || []);
+            setEnglishHits(c.englishHits || []);
+            setMalayalamHits(c.malayalamHits || []);
+            setPunjabiHits(c.punjabiHits || []);
+            setKannadaHits(c.kannadaHits || []);
+            setFeedTracks(c.feedTracks || []);
+            setLoading(false);
+          }
+        } catch {}
+      }
+    });
+  }, [selectedLang, trending.length]);
+
+  const currentMoodObj = MOODS.find((m) => m.id === activeMood) || MOODS[0];
+
+  const [scrollY] = useState(() => new Animated.Value(0));
+  const [headerEntrance] = useState(() => new Animated.Value(0));
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 80],
     outputRange: [1, 0.95],
     extrapolate: 'clamp',
   });
+
+  useEffect(() => {
+    Animated.spring(headerEntrance, {
+      toValue: 1,
+      tension: 55,
+      friction: 9,
+      useNativeDriver: true,
+    }).start();
+  }, [headerEntrance]);
 
   const getFeedQuery = (lang) => {
     if (lang === 'tamil') return 'All Tamil Songs Anirudh Rahman Ilaiyaraaja';
@@ -145,13 +237,34 @@ export default function HomeScreen() {
     return 'Trending Songs Hits Worldwide';
   };
 
-  const fetchHomeData = useCallback(async (lang = selectedLang) => {
+  const fetchHomeData = useCallback(async (lang = selectedLang, forceRefresh = false) => {
     try {
       setFeedPage(1);
+      setVisibleFeedCount(25);
       setHasMore(true);
 
+      // Instant hydration from cache if available (0ms loading lag!)
+      if (homeDataCache[lang] && !forceRefresh) {
+        const c = homeDataCache[lang];
+        setTrending(c.trending || []);
+        setPopularAlbums(c.popularAlbums || []);
+        setArtists(c.artists || []);
+        setTamilHits(c.tamilHits || []);
+        setTamilClassics(c.tamilClassics || []);
+        setTeluguHits(c.teluguHits || []);
+        setTeluguClassics(c.teluguClassics || []);
+        setHindiHits(c.hindiHits || []);
+        setHindiClassics(c.hindiClassics || []);
+        setEnglishHits(c.englishHits || []);
+        setMalayalamHits(c.malayalamHits || []);
+        setPunjabiHits(c.punjabiHits || []);
+        setKannadaHits(c.kannadaHits || []);
+        setFeedTracks(c.feedTracks || []);
+        setLoading(false);
+      }
+
       const [
-        trendingRes, artistsRes,
+        trendingRes, albumsRes, artistsRes,
         tamilRes, tamilClassicsRes,
         teluguRes, teluguClassicsRes,
         hindiRes, hindiClassicsRes,
@@ -162,6 +275,7 @@ export default function HomeScreen() {
         feedRes,
       ] = await Promise.allSettled([
         musicAPI.getTrending(40, lang),
+        musicAPI.getPopularAlbums(12, lang),
         musicAPI.getPopularArtists(18),
         musicAPI.search('Latest Tamil Songs 2024 Amaran Vettaiyan GOAT Anirudh', 'tracks', 40, 1, 'tamil', 'saavn'),
         musicAPI.search('Classic Tamil Old 80s 90s Ilaiyaraaja SPB', 'tracks', 40, 1, 'tamil', 'saavn'),
@@ -173,7 +287,7 @@ export default function HomeScreen() {
         musicAPI.search('Latest Malayalam Songs 2024 Aavesham Premalu Sushin', 'tracks', 40, 1, 'malayalam', 'saavn'),
         musicAPI.search('Latest Punjabi Hits 2024 Karan Aujla Diljit Dosanjh', 'tracks', 40, 1, 'punjabi', 'saavn'),
         musicAPI.search('Latest Kannada Songs 2024 KGF Kantara Ravi Basrur', 'tracks', 40, 1, 'kannada', 'saavn'),
-        musicAPI.search(getFeedQuery(lang), 'tracks', 100, 1, lang, 'saavn'),
+        musicAPI.search(getFeedQuery(lang), 'tracks', 80, 1, lang, 'saavn'),
       ]);
 
       // Cascade deduplication across all sections: NO song is repeated anywhere on the page
@@ -185,6 +299,8 @@ export default function HomeScreen() {
       };
 
       const cleanTrending = dedupeSection(trendingRes.status === 'fulfilled' ? trendingRes.value?.tracks || [] : []);
+      const cleanAlbums = albumsRes.status === 'fulfilled' ? albumsRes.value?.albums || [] : [];
+      const cleanArtists = artistsRes.status === 'fulfilled' ? artistsRes.value?.artists || [] : [];
       const cleanTamilHits = dedupeSection(tamilRes.status === 'fulfilled' ? tamilRes.value?.results || [] : []);
       const cleanTamilClassics = dedupeSection(tamilClassicsRes.status === 'fulfilled' ? tamilClassicsRes.value?.results || [] : []);
       const cleanTeluguHits = dedupeSection(teluguRes.status === 'fulfilled' ? teluguRes.value?.results || [] : []);
@@ -196,8 +312,12 @@ export default function HomeScreen() {
       const cleanPunjabiHits = dedupeSection(punjabiRes.status === 'fulfilled' ? punjabiRes.value?.results || [] : []);
       const cleanKannadaHits = dedupeSection(kannadaRes.status === 'fulfilled' ? kannadaRes.value?.results || [] : []);
 
+      const rawFeed = feedRes.status === 'fulfilled' ? feedRes.value?.results || [] : [];
+      const cleanFeed = dedupeSection(rawFeed);
+
       setTrending(cleanTrending);
-      if (artistsRes.status === 'fulfilled') setArtists(artistsRes.value?.artists || []);
+      setPopularAlbums(cleanAlbums);
+      setArtists(cleanArtists);
       setTamilHits(cleanTamilHits);
       setTamilClassics(cleanTamilClassics);
       setTeluguHits(cleanTeluguHits);
@@ -208,10 +328,26 @@ export default function HomeScreen() {
       setMalayalamHits(cleanMalayalamHits);
       setPunjabiHits(cleanPunjabiHits);
       setKannadaHits(cleanKannadaHits);
-
-      const rawFeed = feedRes.status === 'fulfilled' ? feedRes.value?.results || [] : [];
-      const cleanFeed = dedupeSection(rawFeed);
       setFeedTracks(cleanFeed);
+
+      // Save to memory cache for zero-delay instant hydration
+      homeDataCache[lang] = {
+        trending: cleanTrending,
+        popularAlbums: cleanAlbums,
+        artists: cleanArtists,
+        tamilHits: cleanTamilHits,
+        tamilClassics: cleanTamilClassics,
+        teluguHits: cleanTeluguHits,
+        teluguClassics: cleanTeluguClassics,
+        hindiHits: cleanHindiHits,
+        hindiClassics: cleanHindiClassics,
+        englishHits: cleanEnglishHits,
+        malayalamHits: cleanMalayalamHits,
+        punjabiHits: cleanPunjabiHits,
+        kannadaHits: cleanKannadaHits,
+        feedTracks: cleanFeed,
+      };
+      AsyncStorage.setItem('@vibestream_home_cache', JSON.stringify(homeDataCache)).catch(() => {});
     } catch (e) {
       console.warn('Home fetch error:', e.message);
     } finally {
@@ -221,12 +357,13 @@ export default function HomeScreen() {
   }, [selectedLang]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate cached data before the network refresh.
     fetchHomeData(selectedLang);
-  }, [selectedLang]);
+  }, [fetchHomeData, selectedLang]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchHomeData(selectedLang);
+    fetchHomeData(selectedLang, true);
   };
 
   const handleLanguageSelect = (langId) => {
@@ -263,6 +400,7 @@ export default function HomeScreen() {
           return [...prev, ...additions];
         });
         setFeedPage(nextPage);
+        setVisibleFeedCount((prev) => prev + 30);
       }
     } catch (err) {
       console.warn('Load more error:', err.message);
@@ -381,6 +519,7 @@ export default function HomeScreen() {
           const additions = deduplicateTracks(newItems, currentKeys, currentIds);
           return [...prev, ...additions];
         });
+        setVisibleFeedCount((prev) => prev + 50);
       }
     } catch (e) {
       console.warn('Boost feed error:', e.message);
@@ -410,7 +549,17 @@ export default function HomeScreen() {
             end={{ x: 0.5, y: 1 }}
           >
             <View style={styles.header}>
-              <View style={styles.headerBrandRow}>
+              <Animated.View
+                style={[
+                  styles.headerBrandRow,
+                  {
+                    opacity: headerEntrance,
+                    transform: [
+                      { translateY: headerEntrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
+                    ],
+                  },
+                ]}
+              >
                 <Image
                   source={require('../../assets/icon.png')}
                   style={styles.headerLogoImg}
@@ -420,7 +569,7 @@ export default function HomeScreen() {
                   <Text style={styles.greeting}>{getGreeting()}</Text>
                   <Text style={styles.username}>{user?.username || 'Music Lover'}</Text>
                 </View>
-              </View>
+              </Animated.View>
               <TouchableOpacity
                 style={styles.avatarBtn}
                 onPress={() => router.push('/(tabs)/profile')}
@@ -534,41 +683,76 @@ export default function HomeScreen() {
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Personalized "Made For You" Recommendation Section based on Question/Preferences */}
-        {recommendedTracks.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.recHeaderRow}>
-              <View>
-                <View style={styles.recBadge}>
-                  <Ionicons name="sparkles" size={12} color={Colors.primaryLight} />
-                  <Text style={styles.recBadgeText}>TAILORED FOR YOUR TASTE</Text>
-                </View>
-                <Text style={styles.recTitle}>✨ Made For You</Text>
-                <Text style={styles.recSubtitle}>
-                  Songs picked based on your preferred languages and mood
+        {/* Interactive Mood Recommendations Section */}
+        <View style={styles.section}>
+          <View style={styles.recHeaderRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={[styles.recBadge, { backgroundColor: (currentMoodObj?.color || Colors.primary) + '22' }]}>
+                <Ionicons name="sparkles" size={12} color={currentMoodObj?.color || Colors.primaryLight} />
+                <Text style={[styles.recBadgeText, { color: currentMoodObj?.color || Colors.primaryLight }]}>
+                  CLICK A MOOD FOR INSTANT SONGS
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.retakeBtn}
-                onPress={() => setShowTasteModal(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="options-outline" size={14} color={Colors.primaryLight} />
-                <Text style={styles.retakeBtnText}>Change Taste</Text>
-              </TouchableOpacity>
+              <Text style={styles.recTitle}>{currentMoodObj?.label || '💖 Love & Romantic'}</Text>
+              <Text style={styles.recSubtitle}>
+                Recommended {selectedLang === 'all' ? 'Worldwide' : selectedLang.toUpperCase()} songs in this mood
+              </Text>
             </View>
+            {moodTracks.length > 0 && (
+              <TouchableOpacity
+                style={[styles.playMoodBtn, { backgroundColor: currentMoodObj?.color || Colors.primary }]}
+                onPress={() => loadAndPlay(moodTracks[0], moodTracks, 0)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="play" size={14} color={Colors.white} />
+                <Text style={styles.playMoodBtnText}>Play Mix</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
+          {/* Interactive Clickable Mood Chips */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.moodPillsRow}>
+            {MOODS.map((m) => {
+              const isSelected = activeMood === m.id;
+              return (
+                <TouchableOpacity
+                  key={`mood-pill-${m.id}`}
+                  style={[
+                    styles.moodPill,
+                    isSelected && [styles.moodPillActive, { borderColor: m.color, backgroundColor: m.color + '26' }],
+                  ]}
+                  onPress={() => handleMoodSelect(m.id)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.moodPillText, isSelected && { color: m.color, fontFamily: Typography.fontFamily.semiBold }]}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Mood Songs Cards */}
+          {moodLoading ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-              {recommendedTracks.map((track) => (
+              {Array.from({ length: 4 }).map((_, i) => (
+                <AlbumCardSkeleton key={`mood-skel-${i}`} />
+              ))}
+            </ScrollView>
+          ) : moodTracks.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+              {moodTracks.map((track) => (
                 <AlbumCard
-                  key={`rec-${track.id}`}
+                  key={`mood-${track.id}`}
                   item={track}
-                  onPress={(t) => loadAndPlay(t, recommendedTracks, recommendedTracks.indexOf(t))}
+                  onPress={(t) => loadAndPlay(t, moodTracks, moodTracks.indexOf(t))}
                 />
               ))}
             </ScrollView>
-          </View>
-        )}
+          ) : (
+            <Text style={styles.noMoodText}>Loading songs for this mood...</Text>
+          )}
+        </View>
 
         {/* Trending Now */}
         <View style={styles.section}>
@@ -595,6 +779,58 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+
+        {/* Blockbuster & Trending Albums Section */}
+        {(loading || popularAlbums.length > 0) && (
+          <View style={styles.section}>
+            <SectionHeader
+              title={
+                selectedLang === 'tamil'
+                  ? '💿 Kollywood & Tamil Blockbuster Albums'
+                  : selectedLang === 'telugu'
+                  ? '💿 Tollywood & Telugu Blockbuster Albums'
+                  : selectedLang === 'hindi'
+                  ? '💿 Bollywood & Hindi Blockbuster Albums'
+                  : selectedLang === 'english'
+                  ? '💿 Global Billboard & Pop Albums'
+                  : '💿 Blockbuster & Trending Albums'
+              }
+              subtitle="Full original soundtrack albums · Tap to open album songs"
+              onSeeAll={() => router.push({ pathname: '/(tabs)/search', params: { tab: 'albums' } })}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+              {loading
+                ? Array.from({ length: 4 }).map((_, i) => <AlbumCardSkeleton key={i} />)
+                : popularAlbums.map((album) => (
+                    <AlbumCard
+                      key={album.id}
+                      item={album}
+                      onPress={(a) => router.push(`/album/${a.id}`)}
+                    />
+                  ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Top Indian & Global Artists */}
+        {artists.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="🎤 Top Indian & Global Artists"
+              subtitle="Explore composers, music directors and singers"
+              onSeeAll={() => router.push({ pathname: '/(tabs)/search', params: { tab: 'artists' } })}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+              {artists.map((artist) => (
+                <ArtistChip
+                  key={artist.id}
+                  artist={artist}
+                  onPress={() => router.push(`/artist/${artist.id}`)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* 1. Tamil Latest Superhits Horizontal Section */}
         {tamilHits.length > 0 && selectedLang !== 'hindi' && selectedLang !== 'english' && selectedLang !== 'telugu' && (
@@ -796,23 +1032,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Popular Artists */}
-        {artists.length > 0 && (
-          <View style={styles.section}>
-            <SectionHeader title="🎤 Top Indian & Global Artists" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-              {artists.map((artist) => (
-                <ArtistChip
-                  key={artist.id}
-                  artist={artist}
-                  onPress={() => router.push(`/artist/${artist.id}`)}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* 8. EXTENDED SONGS FEED (Dozens of songs with "Load More" on the Main Page!) */}
+        {/* EXTENDED SONGS FEED (Smooth Windowed Rendering) */}
         {feedTracks.length > 0 && (
           <View style={styles.section}>
             <SectionHeader
@@ -833,10 +1053,10 @@ export default function HomeScreen() {
                   ? '👑 All Kannada Songs Stream (Sandalwood)'
                   : '🎵 All Music & Songs Stream'
               }
-              subtitle={`Showing ${feedTracks.length} songs · Tap any track to play immediately`}
+              subtitle={`Showing ${Math.min(visibleFeedCount, feedTracks.length)} of ${feedTracks.length} songs · Tap any track to play`}
             />
 
-            {feedTracks.map((track, i) => (
+            {feedTracks.slice(0, visibleFeedCount).map((track, i) => (
               <TrackCard
                 key={`${track.id}-${i}`}
                 track={track}
@@ -844,6 +1064,26 @@ export default function HomeScreen() {
                 index={i}
               />
             ))}
+
+            {visibleFeedCount < feedTracks.length && (
+              <TouchableOpacity
+                style={styles.showMoreInlineBtn}
+                onPress={() => setVisibleFeedCount((prev) => Math.min(prev + 30, feedTracks.length))}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={[Colors.primaryDark, Colors.bgElevated]}
+                  style={styles.showMoreInlineGrad}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="chevron-down-circle" size={18} color={Colors.primaryLight} />
+                  <Text style={styles.showMoreInlineText}>
+                    Show More Songs (+30) · {feedTracks.length - visibleFeedCount} remaining
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
 
             {/* Load More Songs Dual Buttons */}
             {hasMore ? (
@@ -946,7 +1186,6 @@ export default function HomeScreen() {
         onClose={() => setShowTasteModal(false)}
         onComplete={(pref) => {
           setShowTasteModal(false);
-          setUserTaste(pref);
           fetchPersonalizedRecommendations(pref);
         }}
       />
@@ -1351,5 +1590,69 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.sm,
     color: Colors.white,
+  },
+  playMoodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: Radius.full,
+    ...Shadow.sm,
+  },
+  playMoodBtnText: {
+    fontFamily: Typography.fontFamily.semiBold,
+    fontSize: Typography.fontSize.xs,
+    color: Colors.white,
+  },
+  moodPillsRow: {
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  moodPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  moodPillActive: {
+    borderWidth: 1.5,
+  },
+  moodPillText: {
+    fontFamily: Typography.fontFamily.medium,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  noMoodText: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textMuted,
+    marginHorizontal: Spacing.base,
+    marginVertical: Spacing.md,
+  },
+  showMoreInlineBtn: {
+    marginHorizontal: Spacing.base,
+    marginVertical: Spacing.md,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
+  showMoreInlineGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+  },
+  showMoreInlineText: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.primaryLight,
   },
 });

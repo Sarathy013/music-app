@@ -66,6 +66,45 @@ const store = {
     return db.users.find((u) => u.email.toLowerCase() === email.toLowerCase()) || null;
   },
 
+  async findOrCreateGoogleUser({ googleId, email, name, picture }) {
+    const db = readDB();
+    let user = db.users.find(
+      (u) => (googleId && u.googleId === googleId) || (email && u.email.toLowerCase() === email.toLowerCase())
+    );
+
+    if (user) {
+      if (googleId && !user.googleId) user.googleId = googleId;
+      if (picture && (!user.profilePicture || user.profilePicture !== picture)) user.profilePicture = picture;
+      user.authProvider = 'google';
+      user.updatedAt = new Date().toISOString();
+      writeDB(db);
+      return user;
+    }
+
+    let baseUsername = (name || email.split('@')[0] || 'User').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+    if (baseUsername.length < 3) baseUsername = 'User_' + Math.floor(1000 + Math.random() * 9000);
+    let username = baseUsername;
+    let counter = 1;
+    while (db.users.some((u) => u.username.toLowerCase() === username.toLowerCase())) {
+      username = `${baseUsername}_${counter++}`;
+    }
+
+    user = {
+      _id: 'user_google_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      username,
+      email: email.toLowerCase(),
+      googleId: googleId || null,
+      authProvider: 'google',
+      password: null,
+      profilePicture: picture || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    db.users.push(user);
+    writeDB(db);
+    return user;
+  },
+
   async findUserById(id) {
     const db = readDB();
     return db.users.find((u) => u._id === id) || null;
@@ -243,8 +282,43 @@ const store = {
       duration: track.duration || 0,
       artworkUrl: track.artworkUrl || null,
       streamUrl: track.streamUrl || null,
+      addedAt: new Date().toISOString(),
       position: pl.tracks.length,
     });
+    pl.updatedAt = new Date().toISOString();
+    writeDB(db);
+    return pl;
+  },
+
+  addTracksToPlaylist(userId, playlistId, tracks) {
+    const db = readDB();
+    const uId = String(userId?._id || userId?.id || userId);
+    const pId = String(playlistId?._id || playlistId?.id || playlistId);
+    const pl = db.playlists.find((p) => String(p._id || p.id) === pId && String(p.user) === uId);
+    if (!pl) throw new Error('Playlist not found');
+    const trackList = Array.isArray(tracks) ? tracks : [tracks];
+    let count = 0;
+    for (const track of trackList) {
+      if (!track) continue;
+      const trackId = String(track.trackId || track.id);
+      const exists = pl.tracks.find(
+        (t) => String(t.trackId) === trackId || (t.title?.toLowerCase() === track.title?.toLowerCase() && t.artist?.toLowerCase() === track.artist?.toLowerCase())
+      );
+      if (!exists) {
+        pl.tracks.push({
+          trackId,
+          title: track.title,
+          artist: track.artist,
+          album: track.album || null,
+          duration: track.duration || 0,
+          artworkUrl: track.artworkUrl || null,
+          streamUrl: track.streamUrl || null,
+          addedAt: new Date().toISOString(),
+          position: pl.tracks.length,
+        });
+        count++;
+      }
+    }
     pl.updatedAt = new Date().toISOString();
     writeDB(db);
     return pl;

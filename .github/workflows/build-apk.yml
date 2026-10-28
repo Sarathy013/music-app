@@ -97,8 +97,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
         with:
-          tag_name: v2.1.0-apk
-          name: "VibeStream v2.1.0 Standalone APK"
+          tag_name: v2.1.0-apk-${{ github.run_number }}
+          name: "VibeStream v2.1.0 Standalone APK (build ${{ github.run_number }})"
           make_latest: true
           body: |
             ### 🎵 VibeStream Standalone Android APK (v2.1.0)

@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Animated,
   StatusBar, ScrollView, Share, ActivityIndicator,
@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
-import { usePlayer } from '../../store/PlayerContext';
+import { usePlayer, usePlayerProgress } from '../../store/PlayerContext';
 import { favoritesAPI, musicAPI } from '../../services/api';
 import { REPEAT_MODES } from '../../constants/config';
 import SleepTimerModal from '../../components/SleepTimerModal';
@@ -17,6 +17,7 @@ import AddToPlaylistModal from '../../components/AddToPlaylistModal';
 import SpotifyLyricsView from '../../components/SpotifyLyricsView';
 import { downloadSong, isTrackDownloaded } from '../../utils/downloader';
 import { showAlert } from '../../utils/alert';
+import MusicBackdrop from '../../components/MusicBackdrop';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ARTWORK_SIZE = Math.min(SCREEN_WIDTH - 64, SCREEN_HEIGHT * 0.36);
@@ -34,18 +35,19 @@ const SOURCE_LABELS = {
   youtube: { label: 'YouTube Music Stream', color: '#EF4444' },
   spotify: { label: 'Spotify Track Match', color: '#10B981' },
   jamendo: { label: 'Creative Commons', color: Colors.teal },
-  musopen: { label: 'Public Domain', color: Colors.primaryLight },
+  musopen: { label: 'Classical catalog', color: Colors.primaryLight },
   fma: { label: 'Free Music Archive', color: Colors.warning },
 };
 
 export default function PlayerScreen() {
   const router = useRouter();
   const {
-    currentTrack, isPlaying, isLoading, position, duration, error,
+    currentTrack, isPlaying, isLoading, error,
     volume, isShuffle, repeatMode, sleepTimerMinutes,
     togglePlayPause, seekTo, setVolume,
     skipNext, skipPrevious, toggleShuffle, cycleRepeat,
   } = usePlayer();
+  const { position, duration } = usePlayerProgress();
 
   const [isFavorite, setIsFavorite] = useState(false);
   const [showSleepTimer, setShowSleepTimer] = useState(false);
@@ -62,9 +64,29 @@ export default function PlayerScreen() {
   // Download state
   const [isDownloaded, setIsDownloaded] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [, setDownloadProgress] = useState(0);
 
-  const artworkScale = useRef(new Animated.Value(isPlaying ? 1 : 0.92)).current;
+  const [artworkScale] = useState(() => new Animated.Value(isPlaying ? 1 : 0.92));
+  const [artworkTilt] = useState(() => new Animated.Value(0));
+  const [favScaleAnim] = useState(() => new Animated.Value(1));
+  const [playBtnScale] = useState(() => new Animated.Value(1));
+  const [glowPulse] = useState(() => new Animated.Value(0.4));
+
+  useEffect(() => {
+    let loop;
+    if (isPlaying) {
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowPulse, { toValue: 0.9, duration: 1600, useNativeDriver: true }),
+          Animated.timing(glowPulse, { toValue: 0.35, duration: 1600, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+    } else {
+      glowPulse.setValue(0.2);
+    }
+    return () => loop?.stop();
+  }, [isPlaying, glowPulse]);
 
   useEffect(() => {
     Animated.spring(artworkScale, {
@@ -73,23 +95,16 @@ export default function PlayerScreen() {
       friction: 8,
       useNativeDriver: true,
     }).start();
-  }, [isPlaying]);
+  }, [isPlaying, artworkScale]);
 
   useEffect(() => {
-    if (currentTrack?.id) {
-      favoritesAPI.check(currentTrack.id)
-        .then((r) => setIsFavorite(r?.isFavorite || false))
-        .catch(() => {});
+    Animated.sequence([
+      Animated.timing(artworkTilt, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.spring(artworkTilt, { toValue: 0, speed: 16, bounciness: 8, useNativeDriver: true }),
+    ]).start();
+  }, [currentTrack?.id, artworkTilt]);
 
-      isTrackDownloaded(currentTrack.id)
-        .then((res) => setIsDownloaded(res))
-        .catch(() => {});
-
-      loadLyrics();
-    }
-  }, [currentTrack?.id]);
-
-  const loadLyrics = async () => {
+  const loadLyrics = useCallback(async () => {
     if (!currentTrack) return;
     setLyricsLoading(true);
     try {
@@ -109,7 +124,22 @@ export default function PlayerScreen() {
     } finally {
       setLyricsLoading(false);
     }
-  };
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if (currentTrack?.id) {
+      favoritesAPI.check(currentTrack.id)
+        .then((r) => setIsFavorite(r?.isFavorite || false))
+        .catch(() => {});
+
+      isTrackDownloaded(currentTrack.id)
+        .then((res) => setIsDownloaded(res))
+        .catch(() => {});
+
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Start lyrics loading for the selected track.
+      loadLyrics();
+    }
+  }, [currentTrack?.id, loadLyrics]);
 
   const handleDownload = async () => {
     if (!currentTrack || isDownloading) return;
@@ -134,6 +164,10 @@ export default function PlayerScreen() {
 
   const toggleFavorite = async () => {
     if (!currentTrack) return;
+    Animated.sequence([
+      Animated.timing(favScaleAnim, { toValue: 1.4, duration: 100, useNativeDriver: true }),
+      Animated.spring(favScaleAnim, { toValue: 1, tension: 120, friction: 5, useNativeDriver: true }),
+    ]).start();
     try {
       if (isFavorite) {
         await favoritesAPI.remove(currentTrack.id);
@@ -142,9 +176,17 @@ export default function PlayerScreen() {
         await favoritesAPI.add(currentTrack);
         setIsFavorite(true);
       }
-    } catch (e) {
+    } catch {
       showAlert('Notice', 'Log in to save favorites to your profile');
     }
+  };
+
+  const handleTogglePlay = () => {
+    Animated.sequence([
+      Animated.timing(playBtnScale, { toValue: 0.88, duration: 70, useNativeDriver: true }),
+      Animated.spring(playBtnScale, { toValue: 1, tension: 100, friction: 5, useNativeDriver: true }),
+    ]).start();
+    togglePlayPause();
   };
 
   const handleShare = async () => {
@@ -186,13 +228,7 @@ export default function PlayerScreen() {
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" />
 
-      {/* Dynamic gradient background */}
-      <LinearGradient
-        colors={[Colors.primaryDark + 'DD', '#0E0922', Colors.bg]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.8 }}
-      />
+      <MusicBackdrop isPlaying={isPlaying} />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -253,8 +289,22 @@ export default function PlayerScreen() {
             <View style={styles.artworkWrap}>
               <Animated.View
                 style={[
+                  styles.glowHalo,
+                  {
+                    opacity: isPlaying ? glowPulse : 0.2,
+                    transform: [{ scale: artworkScale }],
+                  },
+                ]}
+              />
+              <Animated.View
+                style={[
                   styles.artworkContainer,
-                  { transform: [{ scale: artworkScale }] },
+                  {
+                    transform: [
+                      { scale: artworkScale },
+                      { rotate: artworkTilt.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '1.5deg'] }) },
+                    ],
+                  },
                 ]}
               >
                 {currentTrack.artworkUrl ? (
@@ -283,12 +333,14 @@ export default function PlayerScreen() {
                     {currentTrack.artist || 'Unknown Artist'}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={toggleFavorite} style={styles.favBtn}>
-                  <Ionicons
-                    name={isFavorite ? 'heart' : 'heart-outline'}
-                    size={28}
-                    color={isFavorite ? Colors.accent : Colors.textMuted}
-                  />
+                <TouchableOpacity onPress={toggleFavorite} style={styles.favBtn} activeOpacity={0.8}>
+                  <Animated.View style={{ transform: [{ scale: favScaleAnim }] }}>
+                    <Ionicons
+                      name={isFavorite ? 'heart' : 'heart-outline'}
+                      size={28}
+                      color={isFavorite ? Colors.accent : Colors.textMuted}
+                    />
+                  </Animated.View>
                 </TouchableOpacity>
               </View>
 
@@ -356,8 +408,9 @@ export default function PlayerScreen() {
             <Ionicons name="play-skip-back" size={28} color={Colors.textPrimary} />
           </TouchableOpacity>
 
+          <Animated.View style={{ transform: [{ scale: playBtnScale }] }}>
           <TouchableOpacity
-            onPress={togglePlayPause}
+            onPress={handleTogglePlay}
             style={styles.playBtn}
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -379,6 +432,7 @@ export default function PlayerScreen() {
               )}
             </LinearGradient>
           </TouchableOpacity>
+          </Animated.View>
 
           <TouchableOpacity
             onPress={skipNext}
@@ -601,6 +655,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  glowHalo: {
+    position: 'absolute',
+    width: ARTWORK_SIZE + 24,
+    height: ARTWORK_SIZE + 24,
+    borderRadius: Radius.xl + 12,
+    backgroundColor: 'rgba(108,99,255,0.4)',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 30,
+  },
   artworkWrap: {
     alignItems: 'center',
     justifyContent: 'center',

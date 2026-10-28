@@ -1,8 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../constants/theme';
+import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { usePlayer } from '../store/PlayerContext';
 import AddToPlaylistModal from './AddToPlaylistModal';
 
@@ -24,16 +24,20 @@ function getBadgeInfo(track) {
     if (track.language === 'english') return { label: 'English', color: '#38BDF8' };
     return { label: 'HQ 320k', color: '#8B5CF6' };
   }
-  if (track.source === 'jamendo') return { label: 'CC', color: Colors.teal };
-  if (track.source === 'musopen') return { label: 'Classic', color: Colors.primaryLight };
+  if (track.source === 'jamendo') {
+    return track.license === 'Creative Commons'
+      ? { label: 'CC', color: Colors.teal }
+      : { label: 'Jamendo', color: Colors.teal };
+  }
+  if (track.source === 'musopen') return { label: 'Classical', color: Colors.primaryLight };
   return null;
 }
 
 // Memoized EqBars — animations are stable across re-renders
 const EqBars = React.memo(function EqBars() {
-  const bar1 = useRef(new Animated.Value(0.4)).current;
-  const bar2 = useRef(new Animated.Value(0.7)).current;
-  const bar3 = useRef(new Animated.Value(0.5)).current;
+  const [bar1] = React.useState(() => new Animated.Value(0.4));
+  const [bar2] = React.useState(() => new Animated.Value(0.7));
+  const [bar3] = React.useState(() => new Animated.Value(0.5));
 
   React.useEffect(() => {
     const animate = (anim, toVal, duration) =>
@@ -43,10 +47,10 @@ const EqBars = React.memo(function EqBars() {
           Animated.timing(anim, { toValue: 0.2, duration, useNativeDriver: true }),
         ])
       ).start();
-    animate(bar1, 1.0, 350);
-    animate(bar2, 0.9, 450);
-    animate(bar3, 0.8, 300);
-  }, []);
+    animate(bar1, 1.0, 320);
+    animate(bar2, 0.9, 440);
+    animate(bar3, 0.8, 290);
+  }, [bar1, bar2, bar3]);
 
   return (
     <View style={eqStyles.container}>
@@ -62,11 +66,32 @@ const eqStyles = StyleSheet.create({
   bar: { width: 3, height: 14, borderRadius: 2, backgroundColor: Colors.primary },
 });
 
-export default function TrackCard({ track, queue = [], index = 0, style, onPress }) {
-  if (!track) return null;
+function TrackCardComponent({ track, queue = [], index = 0, style, onPress }) {
   const { loadAndPlay, currentTrack, isPlaying, addToQueue } = usePlayer();
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [addedToQueue, setAddedToQueue] = useState(false);
+
+  const [pressScaleAnim] = useState(() => new Animated.Value(1));
+  const [checkScaleAnim] = useState(() => new Animated.Value(1));
   const isActive = currentTrack?.id === track?.id;
+
+  if (!track) return null;
+
+  const handlePressIn = () => {
+    Animated.spring(pressScaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressScaleAnim, {
+      toValue: 1,
+      tension: 90,
+      friction: 6,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const handlePress = () => {
     if (onPress) {
@@ -76,14 +101,31 @@ export default function TrackCard({ track, queue = [], index = 0, style, onPress
     }
   };
 
+  const handleAddToQueue = () => {
+    if (addToQueue) {
+      addToQueue(track);
+      setAddedToQueue(true);
+      checkScaleAnim.setValue(0.3);
+      Animated.spring(checkScaleAnim, {
+        toValue: 1,
+        tension: 110,
+        friction: 6,
+        useNativeDriver: true,
+      }).start();
+      setTimeout(() => setAddedToQueue(false), 1400);
+    }
+  };
+
   const badge = getBadgeInfo(track);
 
   return (
-    <View style={styles.cardWrapper}>
+    <Animated.View style={[styles.cardWrapper, { transform: [{ scale: pressScaleAnim }] }]}>
       <TouchableOpacity
         style={[styles.card, isActive && styles.activeCard, style]}
         onPress={handlePress}
-        activeOpacity={0.65}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
       >
         {isActive && <View style={styles.activeBar} />}
 
@@ -139,13 +181,20 @@ export default function TrackCard({ track, queue = [], index = 0, style, onPress
         >
           <Ionicons name="bookmark-outline" size={19} color={Colors.textMuted} />
         </TouchableOpacity>
+
         <TouchableOpacity
-          onPress={() => addToQueue && addToQueue(track)}
+          onPress={handleAddToQueue}
           hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
           style={styles.actionIcon}
-          activeOpacity={0.5}
+          activeOpacity={0.7}
         >
-          <Ionicons name="add-circle-outline" size={20} color={Colors.primaryLight} />
+          <Animated.View style={{ transform: [{ scale: checkScaleAnim }] }}>
+            <Ionicons
+              name={addedToQueue ? "checkmark-circle" : "add-circle-outline"}
+              size={20}
+              color={addedToQueue ? Colors.success : Colors.primaryLight}
+            />
+          </Animated.View>
         </TouchableOpacity>
       </View>
 
@@ -156,9 +205,20 @@ export default function TrackCard({ track, queue = [], index = 0, style, onPress
           onClose={() => setShowPlaylistModal(false)}
         />
       )}
-    </View>
+    </Animated.View>
   );
 }
+
+const TrackCard = React.memo(TrackCardComponent, (prev, next) => {
+  return (
+    prev.track?.id === next.track?.id &&
+    prev.index === next.index &&
+    prev.queue?.length === next.queue?.length &&
+    prev.style === next.style
+  );
+});
+
+export default TrackCard;
 
 const styles = StyleSheet.create({
   cardWrapper: {
@@ -178,16 +238,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
   },
   activeCard: {
-    backgroundColor: Colors.bgGlass,
+    backgroundColor: 'rgba(108,99,255,0.14)',
     borderWidth: 1,
-    borderColor: Colors.borderGlow,
+    borderColor: 'rgba(108,99,255,0.3)',
   },
   activeBar: {
     position: 'absolute',
     left: 0,
     top: 8,
     bottom: 8,
-    width: 3,
+    width: 3.5,
     borderRadius: 2,
     backgroundColor: Colors.primary,
   },
@@ -195,55 +255,73 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderRadius: Radius.md,
     overflow: 'hidden',
-    ...Shadow.sm,
   },
-  artwork: { width: 52, height: 52, borderRadius: Radius.md },
-  artworkFallback: { alignItems: 'center', justifyContent: 'center' },
-  activeOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(108,99,255,0.7)',
+  artwork: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgElevated,
+  },
+  artworkFallback: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  info: { flex: 1, gap: 3 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  activeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.md,
+  },
+  info: {
+    flex: 1,
+  },
   title: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
     color: Colors.textPrimary,
+    letterSpacing: 0.1,
   },
   activeTitle: {
     color: Colors.primaryLight,
     fontFamily: Typography.fontFamily.semibold,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: 2,
+  },
   artist: {
     fontFamily: Typography.fontFamily.regular,
-    fontSize: Typography.fontSize.sm,
+    fontSize: Typography.fontSize.xs,
     color: Colors.textSecondary,
-    flex: 1,
+    flexShrink: 1,
   },
   sourceBadge: {
-    paddingVertical: 1,
-    paddingHorizontal: 5,
-    borderRadius: Radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: Radius.full,
     borderWidth: 1,
+    alignSelf: 'center',
   },
   sourceText: {
-    fontSize: 8,
-    fontFamily: Typography.fontFamily.semibold,
-    letterSpacing: 0.5,
-  },
-  trailing: { alignItems: 'flex-end', gap: Spacing.xs },
-  actionBtns: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  actionIcon: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: 9,
+    letterSpacing: 0.3,
   },
   duration: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
     color: Colors.textMuted,
+  },
+  actionBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: Spacing.sm,
+    gap: 4,
+  },
+  actionIcon: {
+    padding: 6,
   },
 });

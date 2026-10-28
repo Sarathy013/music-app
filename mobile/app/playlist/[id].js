@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, TextInput,
 } from 'react-native';
@@ -23,16 +23,19 @@ export default function PlaylistScreen() {
   const [showRename, setShowRename] = useState(false);
   const [newName, setNewName] = useState('');
 
-  const fetchPlaylist = async () => {
+  const fetchPlaylist = useCallback(async () => {
     try {
       const res = await playlistAPI.getOne(id);
       setPlaylist(res?.playlist);
       setNewName(res?.playlist?.name || '');
     } catch {}
     finally { setLoading(false); }
-  };
+  }, [id]);
 
-  useEffect(() => { fetchPlaylist(); }, [id]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Load the selected playlist asynchronously.
+    fetchPlaylist();
+  }, [fetchPlaylist]);
 
   const handleRename = async () => {
     if (!newName.trim()) return;

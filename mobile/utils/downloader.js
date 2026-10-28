@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showAlert } from './alert';
@@ -9,7 +9,7 @@ const DOWNLOADS_KEY = '@vibestream_downloads';
 let MediaLibrary = null;
 try {
   MediaLibrary = require('expo-media-library');
-} catch (e) {
+} catch {
   MediaLibrary = null;
 }
 

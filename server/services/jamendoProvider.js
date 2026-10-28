@@ -5,14 +5,13 @@
  * All tracks are released under Creative Commons licenses.
  * API: https://developer.jamendo.com/v3.0
  *
- * Free plan: 50,000 calls/month, no key required for basic endpoints
+ * Register an application and configure JAMENDO_CLIENT_ID.
  */
 
 const axios = require('axios');
 
 const JAMENDO_BASE = 'https://api.jamendo.com/v3.0';
-// Jamendo's public client_id for testing — replace with your own from developer.jamendo.com
-const CLIENT_ID = process.env.JAMENDO_CLIENT_ID || '3dce8b55';
+const CLIENT_ID = process.env.JAMENDO_CLIENT_ID;
 
 const jamendoClient = axios.create({
   baseURL: JAMENDO_BASE,
@@ -33,7 +32,7 @@ function normalizeTrack(track) {
     genre: (track.musicinfo?.tags?.genres || [])[0] || 'Music',
     year: track.releasedate ? new Date(track.releasedate).getFullYear() : null,
     source: 'jamendo',
-    license: track.license_ccurl ? 'Creative Commons' : 'Free',
+    license: track.license_ccurl ? 'Creative Commons' : 'Check provider rights',
     licenseUrl: track.license_ccurl || null,
     shareUrl: track.shareurl || null,
   };
@@ -65,6 +64,11 @@ function normalizeAlbum(album) {
 
 const JamendoProvider = {
   async searchTracks(query, limit = 20, page = 1) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return [];
+    }
+
     try {
       const response = await jamendoClient.get('/tracks', {
         params: {
@@ -102,6 +106,10 @@ const JamendoProvider = {
   },
 
   async searchArtists(query, limit = 10) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return [];
+    }
     try {
       const response = await jamendoClient.get('/artists', {
         params: {
@@ -120,6 +128,10 @@ const JamendoProvider = {
   },
 
   async searchAlbums(query, limit = 10) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return [];
+    }
     try {
       const response = await jamendoClient.get('/albums', {
         params: {
@@ -138,6 +150,10 @@ const JamendoProvider = {
   },
 
   async getTrending(limit = 20) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return [];
+    }
     try {
       const response = await jamendoClient.get('/tracks', {
         params: {
@@ -158,6 +174,10 @@ const JamendoProvider = {
   },
 
   async getNewReleases(limit = 20) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return [];
+    }
     try {
       const response = await jamendoClient.get('/tracks', {
         params: {
@@ -178,6 +198,10 @@ const JamendoProvider = {
   },
 
   async getTracksByGenre(genre, limit = 20) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return [];
+    }
     try {
       const response = await jamendoClient.get('/tracks', {
         params: {
@@ -199,6 +223,10 @@ const JamendoProvider = {
   },
 
   async getPopularArtists(limit = 10) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return [];
+    }
     try {
       const response = await jamendoClient.get('/artists', {
         params: {
@@ -217,6 +245,10 @@ const JamendoProvider = {
   },
 
   async getArtist(artistId) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return null;
+    }
     try {
       const rawId = artistId.replace('jamendo-artist-', '');
       const response = await jamendoClient.get('/artists', {
@@ -236,6 +268,10 @@ const JamendoProvider = {
   },
 
   async getTracksByArtist(artistId, limit = 30) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return [];
+    }
     try {
       const rawId = artistId.replace('jamendo-artist-', '');
       const response = await jamendoClient.get('/tracks', {
@@ -271,6 +307,60 @@ const JamendoProvider = {
       { id: 'acoustic', name: 'Acoustic', color: '#84CC16' },
       { id: 'world', name: 'World', color: '#F97316' },
     ];
+  },
+
+  async getTrack(trackId) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return null;
+    }
+
+    try {
+      const rawId = String(trackId).replace(/^jamendo-/, '');
+      const response = await jamendoClient.get('/tracks', {
+        params: {
+          client_id: CLIENT_ID,
+          format: 'json',
+          id: rawId,
+          audioformat: 'mp31',
+          imagesize: 300,
+          include: 'musicinfo',
+        },
+      });
+      const track = response.data?.results?.[0];
+      return track?.audio ? normalizeTrack(track) : null;
+    } catch (err) {
+      console.warn('Jamendo track lookup error:', err.message);
+      return null;
+    }
+  },
+
+  async getAlbum(albumId) {
+    if (!CLIENT_ID) {
+      console.warn('Jamendo is unavailable: configure JAMENDO_CLIENT_ID.');
+      return null;
+    }
+
+    try {
+      const rawId = String(albumId).replace(/^jamendo-album-/, '');
+      const [albumResponse, tracksResponse] = await Promise.all([
+        jamendoClient.get('/albums', {
+          params: { client_id: CLIENT_ID, format: 'json', id: rawId, imagesize: 300 },
+        }),
+        jamendoClient.get('/tracks', {
+          params: { client_id: CLIENT_ID, format: 'json', album_id: rawId, limit: 50, audioformat: 'mp31', include: 'musicinfo' },
+        }),
+      ]);
+      const album = albumResponse.data?.results?.[0];
+      if (!album) return null;
+      return {
+        ...normalizeAlbum(album),
+        tracks: (tracksResponse.data?.results || []).filter((track) => track.audio).map(normalizeTrack),
+      };
+    } catch (err) {
+      console.warn('Jamendo album lookup error:', err.message);
+      return null;
+    }
   },
 };
 

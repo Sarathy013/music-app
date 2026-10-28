@@ -1,21 +1,29 @@
-import React, { useRef } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../constants/theme';
 import { usePlayer } from '../store/PlayerContext';
 
-export default function AlbumCard({ item, onPress, style, size = 'md' }) {
+import { useRouter } from 'expo-router';
+
+function AlbumCardComponent({ item, onPress, style, size = 'md' }) {
   const { loadAndPlay, currentTrack } = usePlayer();
+  const router = useRouter();
   const isLarge = size === 'lg';
   const cardSize = isLarge ? 170 : 148;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [scaleAnim] = useState(() => new Animated.Value(1));
 
-  const isActive = currentTrack?.album === (item.name || item.title);
+  const isActive = currentTrack?.album === (item?.name || item?.title);
 
   const handlePress = () => {
-    if (onPress) onPress(item);
-    else if (item.streamUrl) loadAndPlay(item, [item], 0);
+    if (onPress) {
+      onPress(item);
+    } else if (item?.streamUrl) {
+      loadAndPlay(item, [item], 0);
+    } else if (item?.id) {
+      router.push(`/album/${item.id}`);
+    }
   };
 
   const handlePressIn = () =>
@@ -54,7 +62,9 @@ export default function AlbumCard({ item, onPress, style, size = 'md' }) {
           />
           {item.source && (
             <View style={[styles.sourceBadge, { backgroundColor: item.source === 'jamendo' ? Colors.teal + 'DD' : Colors.primaryDark + 'DD' }]}>
-              <Text style={styles.sourceText}>{item.source === 'jamendo' ? 'CC' : 'PD'}</Text>
+              <Text style={styles.sourceText}>
+                {item.source === 'jamendo' ? (item.license === 'Creative Commons' ? 'CC' : 'Jamendo') : item.source === 'musopen' ? 'Classical' : item.source}
+              </Text>
             </View>
           )}
         </View>
@@ -70,6 +80,9 @@ export default function AlbumCard({ item, onPress, style, size = 'md' }) {
     </Animated.View>
   );
 }
+
+const AlbumCard = React.memo(AlbumCardComponent);
+export default AlbumCard;
 
 const styles = StyleSheet.create({
   card: {

@@ -33,12 +33,7 @@ function authReducer(state, action) {
 export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Restore session on mount
-  useEffect(() => {
-    restoreSession();
-  }, []);
-
-  const restoreSession = async () => {
+  async function restoreSession() {
     try {
       const token = await getToken();
       const userStr = await AsyncStorage.getItem(STORAGE_KEYS.USER);
@@ -48,10 +43,16 @@ export function AuthProvider({ children }) {
       } else {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
+
     } catch {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+  }
+
+  // Restore session on mount
+  useEffect(() => {
+    restoreSession();
+  }, []);
 
   const login = async (email, password) => {
     try {
@@ -97,10 +98,24 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const loginWithGoogle = async (googleUserData) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const data = await authAPI.googleLogin(googleUserData);
+      await setToken(data.token);
+      await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
+      dispatch({ type: 'LOGIN_SUCCESS', payload: data });
+      return { success: true, user: data.user };
+    } catch (err) {
+      dispatch({ type: 'SET_ERROR', payload: err.message });
+      return { success: false, message: err.message };
+    }
+  };
+
   const clearError = () => dispatch({ type: 'SET_ERROR', payload: null });
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, updateUser, clearError }}>
+    <AuthContext.Provider value={{ ...state, login, register, loginWithGoogle, logout, updateUser, clearError }}>
       {children}
     </AuthContext.Provider>
   );

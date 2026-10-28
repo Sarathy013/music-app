@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -28,7 +28,7 @@ function formatTime(s) {
 
 export default function QueueSheet({ visible, onClose }) {
   const { queue, currentIndex, currentTrack, isPlaying, playFromQueue, removeFromQueue } = usePlayer();
-  const slideAnim = useRef(new Animated.Value(600)).current;
+  const [slideAnim] = useState(() => new Animated.Value(600));
 
   useEffect(() => {
     if (visible) {
@@ -40,7 +40,7 @@ export default function QueueSheet({ visible, onClose }) {
         useNativeDriver: true,
       }).start();
     }
-  }, [visible]);
+  }, [visible, slideAnim]);
 
   const handleClose = () => {
     Animated.timing(slideAnim, {

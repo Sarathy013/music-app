@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,12 +39,13 @@ export default function SpotifyLyricsView({
 }) {
   const scrollViewRef = useRef(null);
 
+  const syncedLyrics = lyricsData?.syncedLyrics;
   const syncedLines = React.useMemo(() => {
-    if (lyricsData?.syncedLyrics) {
-      return parseLRC(lyricsData.syncedLyrics);
+    if (syncedLyrics) {
+      return parseLRC(syncedLyrics);
     }
     return [];
-  }, [lyricsData?.syncedLyrics]);
+  }, [syncedLyrics]);
 
   const activeIndex = React.useMemo(() => {
     if (!syncedLines.length) return -1;
@@ -65,7 +66,7 @@ export default function SpotifyLyricsView({
       try {
         const targetY = Math.max(0, activeIndex * 52 - 80);
         scrollViewRef.current.scrollTo({ y: targetY, animated: true });
-      } catch (err) {}
+      } catch {}
     }
   }, [activeIndex]);
 
@@ -84,7 +85,7 @@ export default function SpotifyLyricsView({
         <Ionicons name="musical-notes-outline" size={48} color={Colors.textMuted} />
         <Text style={styles.emptyTitle}>No Lyrics Found</Text>
         <Text style={styles.emptySubtitle}>
-          Lyrics aren't available for this track yet.
+          Lyrics aren&apos;t available for this track yet.
         </Text>
         {onRetry && (
           <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>

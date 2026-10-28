@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Dimensions,
+  View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,11 +21,15 @@ export const LANGUAGES = [
 ];
 
 export const MOODS = [
+  { id: 'romantic', label: '💖 Love & Romantic', color: '#EC4899', query: 'Romantic Love Melodies Duets' },
+  { id: 'sad', label: '💔 Sad & Heartbreak', color: '#6366F1', query: 'Sad Melody Heartbreak Emotional' },
   { id: 'happy', label: '😄 Happy & Upbeat', color: '#22C55E', query: 'Upbeat Happy Dance Party Hits' },
-  { id: 'sad', label: '💔 Sad & Emotional', color: '#6366F1', query: 'Sad Melody Heartbreak Emotional' },
-  { id: 'romantic', label: '💖 Romantic & Love', color: '#EC4899', query: 'Romantic Love Melodies' },
   { id: 'chill', label: '🌙 Chill & Relaxing', color: '#8B5CF6', query: 'Acoustic Lo-fi Chill Relaxing' },
-  { id: 'mix', label: '🔥 All-Kind Mix', color: Colors.primary, query: 'Top Mega Hit Songs Best Mix' },
+  { id: 'party', label: '🔥 Party & Dance', color: '#F97316', query: 'Dance Party Club Kuthu High Bass Hits' },
+  { id: 'workout', label: '⚡ Workout & Energy', color: '#EF4444', query: 'Workout Gym Motivation High Bass' },
+  { id: 'rain', label: '🌧️ Rainy & Nostalgia', color: '#06B6D4', query: 'Rain Melody Nostalgic Evergreen' },
+  { id: 'devotional', label: '🕉️ Devotional & Spiritual', color: '#EAB308', query: 'Devotional Bhakti Spiritual Songs' },
+  { id: 'mix', label: '✨ All-Kind Mix', color: Colors.primary, query: 'Top Mega Hit Songs Best Mix' },
 ];
 
 export async function getUserPreferences() {
@@ -157,7 +161,7 @@ export default function TasteOnboardingModal({ visible, onComplete, onClose }) {
               </View>
 
               {/* Question 2: Moods */}
-              <Text style={styles.sectionLabel}>2. What's your usual music mood?</Text>
+              <Text style={styles.sectionLabel}>2. What&apos;s your usual music mood?</Text>
               <View style={styles.pillGrid}>
                 {MOODS.map((mood) => {
                   const active = selectedMoods.includes(mood.id);

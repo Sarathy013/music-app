@@ -1,50 +1,103 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet, Animated,
+  View, Text, Image, TouchableOpacity, StyleSheet, Animated, Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { usePlayer } from '../store/PlayerContext';
+import { usePlayer, usePlayerProgress } from '../store/PlayerContext';
 import { Colors, Typography, Spacing, Radius, MINI_PLAYER_HEIGHT, BOTTOM_TAB_HEIGHT, Shadow } from '../constants/theme';
 import { useRouter } from 'expo-router';
 
-// Pulsing dot animation for "now playing"
-function PlayingDot() {
-  const pulse = useRef(new Animated.Value(1)).current;
+// Animated 3-bar equalizer for "now playing"
+function MiniEqBars() {
+  const [b1] = useState(() => new Animated.Value(0.3));
+  const [b2] = useState(() => new Animated.Value(0.7));
+  const [b3] = useState(() => new Animated.Value(0.4));
 
   useEffect(() => {
-    Animated.loop(
+    const loop1 = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.4, duration: 600, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(b1, { toValue: 1, duration: 320, useNativeDriver: true }),
+        Animated.timing(b1, { toValue: 0.25, duration: 320, useNativeDriver: true }),
       ])
-    ).start();
-  }, []);
+    );
+    const loop2 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(b2, { toValue: 1, duration: 420, useNativeDriver: true }),
+        Animated.timing(b2, { toValue: 0.2, duration: 420, useNativeDriver: true }),
+      ])
+    );
+    const loop3 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(b3, { toValue: 1, duration: 280, useNativeDriver: true }),
+        Animated.timing(b3, { toValue: 0.3, duration: 280, useNativeDriver: true }),
+      ])
+    );
+    loop1.start();
+    loop2.start();
+    loop3.start();
+    return () => {
+      loop1.stop();
+      loop2.stop();
+      loop3.stop();
+    };
+  }, [b1, b2, b3]);
 
   return (
-    <Animated.View style={[styles.playingDot, { transform: [{ scale: pulse }] }]} />
+    <View style={styles.miniEqRow}>
+      <Animated.View style={[styles.miniEqBar, { transform: [{ scaleY: b1 }] }]} />
+      <Animated.View style={[styles.miniEqBar, { transform: [{ scaleY: b2 }] }]} />
+      <Animated.View style={[styles.miniEqBar, { transform: [{ scaleY: b3 }] }]} />
+    </View>
   );
 }
 
 export default function MiniPlayer() {
   const {
-    currentTrack, isPlaying, isLoading, position, duration,
+    currentTrack, isPlaying, isLoading,
     togglePlayPause, skipNext, skipPrevious, closePlayer,
   } = usePlayer();
+  const { position, duration } = usePlayerProgress();
   const router = useRouter();
-  const slideAnim = useRef(new Animated.Value(120)).current;
+  const [slideAnim] = useState(() => new Animated.Value(120));
+  const [playBtnScale] = useState(() => new Animated.Value(1));
+  const [rotateAnim] = useState(() => new Animated.Value(0));
+  const rotateLoop = useRef(null);
 
   // Slide in when track loads
   useEffect(() => {
     if (currentTrack) {
       Animated.spring(slideAnim, {
         toValue: 0,
-        tension: 65,
-        friction: 11,
+        tension: 70,
+        friction: 10,
         useNativeDriver: true,
       }).start();
     }
-  }, [currentTrack?.id]);
+  }, [currentTrack, currentTrack?.id, slideAnim]);
+
+  // Vinyl continuous rotation when playing
+  useEffect(() => {
+    if (isPlaying) {
+      rotateLoop.current = Animated.loop(
+        Animated.timing(rotateAnim, {
+          toValue: 1,
+          duration: 10000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      rotateLoop.current.start();
+    } else {
+      rotateLoop.current?.stop();
+    }
+    return () => rotateLoop.current?.stop();
+  }, [isPlaying, rotateAnim]);
+
+  const spin = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   if (!currentTrack) return null;
 
@@ -52,6 +105,14 @@ export default function MiniPlayer() {
 
   const handleOpenFullPlayer = () => {
     router.push('/player');
+  };
+
+  const handleTogglePlayPause = () => {
+    Animated.sequence([
+      Animated.timing(playBtnScale, { toValue: 0.85, duration: 70, useNativeDriver: true }),
+      Animated.spring(playBtnScale, { toValue: 1, tension: 90, friction: 5, useNativeDriver: true }),
+    ]).start();
+    togglePlayPause();
   };
 
   const getSourceBadgeText = (track) => {
@@ -64,8 +125,8 @@ export default function MiniPlayer() {
       if (track.language === 'english') return 'English';
       return 'HQ';
     }
-    if (track.source === 'jamendo') return 'CC';
-    if (track.source === 'musopen') return 'PD';
+    if (track.source === 'jamendo') return track.license === 'Creative Commons' ? 'CC' : 'Jamendo';
+    if (track.source === 'musopen') return 'Classical';
     return null;
   };
 
@@ -80,7 +141,7 @@ export default function MiniPlayer() {
     >
       {/* Gradient background with glassmorphism */}
       <LinearGradient
-        colors={['rgba(30,22,60,0.98)', 'rgba(14,14,24,0.99)']}
+        colors={['rgba(32,24,65,0.98)', 'rgba(14,14,24,0.99)']}
         style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -98,7 +159,7 @@ export default function MiniPlayer() {
           onPress={handleOpenFullPlayer}
           activeOpacity={0.8}
         >
-          <View style={styles.artworkWrap}>
+          <Animated.View style={[styles.artworkWrap, { transform: [{ rotate: isPlaying ? spin : '0deg' }] }]}>
             {currentTrack.artworkUrl ? (
               <Image source={{ uri: currentTrack.artworkUrl }} style={styles.artwork} />
             ) : (
@@ -111,17 +172,16 @@ export default function MiniPlayer() {
                 <Ionicons name="musical-notes" size={16} color="rgba(255,255,255,0.8)" />
               </LinearGradient>
             )}
-            {isPlaying && (
-              <View style={styles.playingIndicator}>
-                <PlayingDot />
-              </View>
-            )}
-          </View>
+            <View style={styles.vinylHole} />
+          </Animated.View>
 
           <View style={styles.info}>
-            <Text style={styles.title} numberOfLines={1}>
-              {currentTrack.title}
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title} numberOfLines={1}>
+                {currentTrack.title}
+              </Text>
+              {isPlaying && <MiniEqBars />}
+            </View>
             <View style={styles.artistRow}>
               <Text style={styles.artist} numberOfLines={1}>
                 {currentTrack.artist || 'Unknown Artist'}
@@ -146,22 +206,24 @@ export default function MiniPlayer() {
             <Ionicons name="play-skip-back" size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={togglePlayPause}
-            style={styles.playBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            activeOpacity={0.7}
-          >
-            {isLoading ? (
-              <Ionicons name="ellipsis-horizontal" size={20} color={Colors.white} />
-            ) : (
-              <Ionicons
-                name={isPlaying ? 'pause' : 'play'}
-                size={22}
-                color={Colors.white}
-              />
-            )}
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: playBtnScale }] }}>
+            <TouchableOpacity
+              onPress={handleTogglePlayPause}
+              style={styles.playBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <Ionicons name="ellipsis-horizontal" size={20} color={Colors.white} />
+              ) : (
+                <Ionicons
+                  name={isPlaying ? 'pause' : 'play'}
+                  size={22}
+                  color={Colors.white}
+                />
+              )}
+            </TouchableOpacity>
+          </Animated.View>
 
           <TouchableOpacity
             onPress={skipNext}
@@ -189,11 +251,11 @@ export default function MiniPlayer() {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: BOTTOM_TAB_HEIGHT + 6,
-    left: 10,
-    right: 10,
+    bottom: BOTTOM_TAB_HEIGHT,
+    left: 8,
+    right: 8,
     height: MINI_PLAYER_HEIGHT,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(108,99,255,0.3)',
@@ -226,87 +288,90 @@ const styles = StyleSheet.create({
   },
   artworkWrap: {
     position: 'relative',
-    borderRadius: Radius.md,
-    overflow: 'visible',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   artwork: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
+    borderRadius: 22,
   },
   artworkFallback: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playingIndicator: {
+  vinylHole: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: Colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primaryLight,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
   },
   info: {
     flex: 1,
-    justifyContent: 'center',
-    gap: 2,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   title: {
+    flex: 1,
     fontFamily: Typography.fontFamily.semibold,
     fontSize: Typography.fontSize.sm,
     color: Colors.textPrimary,
+  },
+  miniEqRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+    height: 12,
+  },
+  miniEqBar: {
+    width: 2.5,
+    height: 10,
+    borderRadius: 1,
+    backgroundColor: Colors.primary,
   },
   artistRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 2,
   },
   artist: {
+    flex: 1,
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
     color: Colors.textSecondary,
-    flexShrink: 1,
   },
   badgeWrap: {
+    backgroundColor: 'rgba(108,99,255,0.25)',
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
-    backgroundColor: Colors.bgElevated,
-    borderWidth: 0.5,
-    borderColor: Colors.border,
   },
   badgeText: {
     fontFamily: Typography.fontFamily.bold,
-    fontSize: 8,
+    fontSize: 9,
     color: Colors.primaryLight,
   },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingRight: 4,
   },
   btn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtn: {
-    width: 26,
-    height: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 2,
+    padding: 6,
   },
   playBtn: {
     width: 38,
@@ -315,6 +380,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadow.sm,
+    ...Shadow.glow,
+  },
+  closeBtn: {
+    padding: 6,
+    marginLeft: 2,
   },
 });

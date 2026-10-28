@@ -4,8 +4,9 @@ const bcrypt = require('bcryptjs');
 const { isDbConnected } = require('../config/database');
 const store = require('../data/store');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'vibestream_jwt_secret_dev_key_2026';
 const signToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+  jwt.sign({ id }, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
 
 // POST /api/auth/register
 exports.register = async (req, res, next) => {
@@ -74,6 +75,96 @@ exports.login = async (req, res, next) => {
       success: true,
       token,
       user: { id: user._id, username: user.username, email: user.email, profilePicture: user.profilePicture },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/auth/google
+exports.googleLogin = async (req, res, next) => {
+  try {
+    const { email, name, picture, googleId } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Google account email is required.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanGoogleId = googleId || `gid_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const cleanName = (name || cleanEmail.split('@')[0] || 'Google User').trim();
+
+    if (isDbConnected()) {
+      let user = await User.findOne({
+        $or: [{ googleId: cleanGoogleId }, { email: cleanEmail }],
+      });
+
+      if (user) {
+        let updated = false;
+        if (!user.googleId && cleanGoogleId) {
+          user.googleId = cleanGoogleId;
+          updated = true;
+        }
+        if (picture && (!user.profilePicture || user.profilePicture !== picture)) {
+          user.profilePicture = picture;
+          updated = true;
+        }
+        if (user.authProvider !== 'google') {
+          user.authProvider = 'google';
+          updated = true;
+        }
+        if (updated) await user.save();
+      } else {
+        let baseUsername = cleanName.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+        if (baseUsername.length < 3) baseUsername = 'User_' + Math.floor(1000 + Math.random() * 9000);
+        let username = baseUsername;
+        let counter = 1;
+        while (await User.findOne({ username })) {
+          username = `${baseUsername}_${counter++}`;
+        }
+
+        user = await User.create({
+          username,
+          email: cleanEmail,
+          googleId: cleanGoogleId,
+          authProvider: 'google',
+          profilePicture: picture || null,
+        });
+      }
+
+      const token = signToken(user._id);
+      return res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          profilePicture: user.profilePicture,
+          authProvider: 'google',
+        },
+      });
+    }
+
+    // In-memory fallback
+    const user = await store.findOrCreateGoogleUser({
+      googleId: cleanGoogleId,
+      email: cleanEmail,
+      name: cleanName,
+      picture: picture || null,
+    });
+
+    const token = signToken(user._id);
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        profilePicture: user.profilePicture,
+        authProvider: 'google',
+      },
     });
   } catch (err) {
     next(err);

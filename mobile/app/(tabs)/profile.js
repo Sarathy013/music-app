@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Alert, Image,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -61,7 +61,7 @@ const EQ_PRESET_KEYS = Object.keys(EQ_PRESETS);
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const { setSleepTimer, sleepTimerMinutes, eqPreset, setEqPreset, addToQueue } = usePlayer();
+  const { sleepTimerMinutes, eqPreset, setEqPreset } = usePlayer();
 
   const [autoplay, setAutoplay] = useState(true);
   const [crossfade, setCrossfade] = useState(false);
@@ -116,16 +116,26 @@ export default function ProfileScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.profileCard}>
-          <LinearGradient
-            colors={[Colors.primary, Colors.accent]}
-            style={styles.avatar}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.avatarText}>{(user?.username?.[0] || 'V').toUpperCase()}</Text>
-          </LinearGradient>
+          {user?.profilePicture ? (
+            <Image source={{ uri: user.profilePicture }} style={styles.avatarImg} />
+          ) : (
+            <LinearGradient
+              colors={[Colors.primary, Colors.accent]}
+              style={styles.avatar}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text style={styles.avatarText}>{(user?.username?.[0] || 'V').toUpperCase()}</Text>
+            </LinearGradient>
+          )}
           <Text style={styles.username}>{user?.username || 'Music Lover'}</Text>
           <Text style={styles.email}>{user?.email || ''}</Text>
+          {user?.authProvider === 'google' && (
+            <View style={styles.googleBadge}>
+              <Ionicons name="logo-google" size={12} color="#4285F4" />
+              <Text style={styles.googleBadgeText}>Google Account</Text>
+            </View>
+          )}
           <TouchableOpacity
             style={styles.editBtn}
             onPress={() => router.push('/auth/edit-profile')}
@@ -317,9 +327,35 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     ...Shadow.lg,
   },
+  avatarImg: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#4285F4',
+    ...Shadow.lg,
+  },
   avatarText: { fontFamily: Typography.fontFamily.bold, fontSize: 40, color: Colors.white },
   username: { fontFamily: Typography.fontFamily.bold, fontSize: Typography.fontSize.xl, color: Colors.textPrimary },
   email: { fontFamily: Typography.fontFamily.regular, fontSize: Typography.fontSize.sm, color: Colors.textSecondary },
+  googleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#1E293B',
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginTop: 4,
+  },
+  googleBadgeText: {
+    fontFamily: Typography.fontFamily.medium,
+    fontSize: Typography.fontSize.xs,
+    color: '#60A5FA',
+  },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',

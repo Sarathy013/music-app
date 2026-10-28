@@ -16,15 +16,22 @@ const API_KEY = process.env.MUSOPEN_API_KEY;
 
 const musopenClient = axios.create({
   baseURL: MUSOPEN_BASE_URL,
-  headers: { Authorization: `Token ${API_KEY}` },
+  ...(API_KEY ? { headers: { Authorization: `Token ${API_KEY}` } } : {}),
   timeout: 10000,
 });
+
+function hasApiKey() {
+  if (API_KEY) return true;
+  console.warn('Musopen is unavailable: configure MUSOPEN_API_KEY.');
+  return false;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function normalizeTrack(recording) {
   return {
-    id: String(recording.id),
+    id: `musopen-${recording.id}`,
+    rawId: String(recording.id),
     title: recording.name || 'Untitled',
     artist: recording.composer
       ? recording.composer.complete_name || recording.composer.name
@@ -38,13 +45,15 @@ function normalizeTrack(recording) {
     composer: recording.composer ? recording.composer.complete_name : null,
     performers: recording.performers || [],
     source: 'musopen',
-    license: 'Public Domain',
+    license: recording.license || recording.license_name || 'Check provider rights',
+    licenseUrl: recording.license_url || recording.licenseUrl || null,
   };
 }
 
 function normalizeComposer(composer) {
   return {
-    id: String(composer.id),
+    id: `musopen-artist-${composer.id}`,
+    rawId: String(composer.id),
     name: composer.complete_name || composer.name,
     bio: composer.bio || '',
     imageUrl: composer.picture || null,
@@ -55,7 +64,8 @@ function normalizeComposer(composer) {
 
 function normalizeAlbum(album) {
   return {
-    id: String(album.id),
+    id: `musopen-album-${album.id}`,
+    rawId: String(album.id),
     name: album.name,
     artist: album.composer
       ? album.composer.complete_name || album.composer.name
@@ -66,6 +76,11 @@ function normalizeAlbum(album) {
   };
 }
 
+function getResults(data) {
+  if (Array.isArray(data?.results)) return data.results;
+  return Array.isArray(data) ? data : [];
+}
+
 // ─── Provider Methods ────────────────────────────────────────────────────────
 
 const MusicProvider = {
@@ -73,46 +88,41 @@ const MusicProvider = {
    * Search across recordings, composers, and albums.
    */
   async searchTracks(query, limit = 20, page = 1) {
+    if (!hasApiKey()) return [];
     try {
       const response = await musopenClient.get('/v1/recordings', {
         params: { title: query, limit, page },
       });
-      const results = (response.data?.results || response.data || []).map(normalizeTrack);
-      if (results.length > 0) return results;
-      throw new Error('No results from Musopen');
+      return getResults(response.data).map(normalizeTrack);
     } catch (err) {
-      const q = (query || '').toLowerCase().trim();
-      return getMockTracks().filter(
-        (t) => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q) || t.album?.toLowerCase().includes(q)
-      ).slice(0, limit);
+      console.warn('Musopen track search error:', err.message);
+      return [];
     }
   },
 
   async searchComposers(query, limit = 10) {
+    if (!hasApiKey()) return [];
     try {
       const response = await musopenClient.get('/v1/composers', {
         params: { name: query, limit },
       });
-      const results = (response.data?.results || response.data || []).map(normalizeComposer);
-      if (results.length > 0) return results;
-      throw new Error('No composers from Musopen');
+      return getResults(response.data).map(normalizeComposer);
     } catch (err) {
-      const q = (query || '').toLowerCase().trim();
-      return getMockArtists().filter((a) => a.name.toLowerCase().includes(q)).slice(0, limit);
+      console.warn('Musopen composer search error:', err.message);
+      return [];
     }
   },
 
   async searchAlbums(query, limit = 10) {
+    if (!hasApiKey()) return [];
     try {
       const response = await musopenClient.get('/v1/albums', {
         params: { name: query, limit },
       });
-      return (response.data?.results || response.data || []).map(normalizeAlbum);
+      return getResults(response.data).map(normalizeAlbum);
     } catch (err) {
-      return [
-        { id: 'alb-1', name: 'Beethoven: Complete Symphonies', artist: 'Ludwig van Beethoven', artworkUrl: null, year: 1808, source: 'musopen' },
-        { id: 'alb-2', name: 'Vivaldi: The Four Seasons & Concertos', artist: 'Antonio Vivaldi', artworkUrl: null, year: 1725, source: 'musopen' },
-      ];
+      console.warn('Musopen album search error:', err.message);
+      return [];
     }
   },
 
@@ -120,11 +130,14 @@ const MusicProvider = {
    * Get a single track by ID.
    */
   async getTrack(id) {
+    if (!hasApiKey()) return null;
     try {
-      const response = await musopenClient.get(`/v1/recordings/${id}`);
-      return normalizeTrack(response.data);
+      const rawId = String(id).replace(/^musopen-/, '');
+      const response = await musopenClient.get(`/v1/recordings/${rawId}`);
+      return response.data ? normalizeTrack(response.data) : null;
     } catch (err) {
-      return getMockTracks().find((t) => t.id === id) || getMockTracks()[0];
+      console.warn('Musopen track lookup error:', err.message);
+      return null;
     }
   },
 
@@ -132,15 +145,15 @@ const MusicProvider = {
    * Get trending / featured recordings.
    */
   async getTrending(limit = 20) {
+    if (!hasApiKey()) return [];
     try {
       const response = await musopenClient.get('/v1/recordings', {
         params: { limit, page: 1, sort: 'downloads' },
       });
-      const results = (response.data?.results || response.data || []).map(normalizeTrack);
-      if (results.length > 0) return results;
-      return getMockTracks();
+      return getResults(response.data).map(normalizeTrack);
     } catch (err) {
-      return getMockTracks();
+      console.warn('Musopen trending error:', err.message);
+      return [];
     }
   },
 
@@ -148,15 +161,15 @@ const MusicProvider = {
    * Get new releases (recently added recordings).
    */
   async getNewReleases(limit = 20) {
+    if (!hasApiKey()) return [];
     try {
       const response = await musopenClient.get('/v1/recordings', {
         params: { limit, page: 1 },
       });
-      const results = (response.data?.results || response.data || []).map(normalizeTrack);
-      if (results.length > 0) return results;
-      return getMockTracks().slice().reverse();
+      return getResults(response.data).map(normalizeTrack);
     } catch (err) {
-      return getMockTracks().slice().reverse();
+      console.warn('Musopen new releases error:', err.message);
+      return [];
     }
   },
 
@@ -164,17 +177,15 @@ const MusicProvider = {
    * Get recordings by composer (artist page).
    */
   async getTracksByArtist(composerId, limit = 30) {
+    if (!hasApiKey()) return [];
     try {
       const response = await musopenClient.get('/v1/recordings', {
-        params: { composer: composerId, limit },
+        params: { composer: String(composerId).replace(/^musopen-artist-/, ''), limit },
       });
-      const results = (response.data?.results || response.data || []).map(normalizeTrack);
-      if (results.length > 0) return results;
-      throw new Error('No tracks');
+      return getResults(response.data).map(normalizeTrack);
     } catch (err) {
-      const artist = getMockArtists().find((a) => a.id === composerId);
-      const name = artist ? artist.name.toLowerCase() : '';
-      return getMockTracks().filter((t) => !name || t.artist.toLowerCase().includes(name) || name.includes(t.artist.toLowerCase()));
+      console.warn('Musopen composer tracks error:', err.message);
+      return [];
     }
   },
 
@@ -182,18 +193,14 @@ const MusicProvider = {
    * Get a composer (artist) by ID.
    */
   async getArtist(composerId) {
+    if (!hasApiKey()) return null;
     try {
-      const response = await musopenClient.get(`/v1/composers/${composerId}`);
-      return normalizeComposer(response.data);
+      const rawId = String(composerId).replace(/^musopen-artist-/, '');
+      const response = await musopenClient.get(`/v1/composers/${rawId}`);
+      return response.data ? normalizeComposer(response.data) : null;
     } catch (err) {
-      return getMockArtists().find((a) => a.id === composerId) || {
-        id: composerId,
-        name: 'Classical Master',
-        bio: 'Renowned classical composer.',
-        imageUrl: null,
-        era: 'Classical',
-        source: 'musopen',
-      };
+      console.warn('Musopen composer lookup error:', err.message);
+      return null;
     }
   },
 
@@ -201,24 +208,19 @@ const MusicProvider = {
    * Get an album by ID.
    */
   async getAlbum(albumId) {
+    if (!hasApiKey()) return null;
     try {
-      const albumRes = await musopenClient.get(`/v1/albums/${albumId}`);
+      const rawId = String(albumId).replace(/^musopen-album-/, '');
+      const albumRes = await musopenClient.get(`/v1/albums/${rawId}`);
       const tracksRes = await musopenClient.get('/v1/recordings', {
-        params: { album: albumId, limit: 50 },
+        params: { album: rawId, limit: 50 },
       });
       const album = normalizeAlbum(albumRes.data);
-      album.tracks = (tracksRes.data?.results || tracksRes.data || []).map(normalizeTrack);
+      album.tracks = getResults(tracksRes.data).map(normalizeTrack);
       return album;
     } catch (err) {
-      return {
-        id: albumId,
-        name: 'Masterpieces of Classical Music',
-        artist: 'Various Artists',
-        artworkUrl: null,
-        year: 2024,
-        source: 'musopen',
-        tracks: getMockTracks(),
-      };
+      console.warn('Musopen album lookup error:', err.message);
+      return null;
     }
   },
 
@@ -226,15 +228,15 @@ const MusicProvider = {
    * List popular composers as "artists".
    */
   async getPopularArtists(limit = 10) {
+    if (!hasApiKey()) return [];
     try {
       const response = await musopenClient.get('/v1/composers', {
         params: { limit, page: 1 },
       });
-      const results = (response.data?.results || response.data || []).map(normalizeComposer);
-      if (results.length > 0) return results;
-      return getMockArtists();
+      return getResults(response.data).map(normalizeComposer);
     } catch (err) {
-      return getMockArtists();
+      console.warn('Musopen popular composers error:', err.message);
+      return [];
     }
   },
 
@@ -264,119 +266,5 @@ const MusicProvider = {
     return track.streamUrl || null;
   },
 };
-
-// ─── Fallback mock data when API key is not set ──────────────────────────────
-
-function getMockTracks() {
-  return [
-    {
-      id: 'mock-1',
-      title: 'Symphony No. 5 in C Minor',
-      artist: 'Ludwig van Beethoven',
-      album: 'Beethoven Symphonies',
-      duration: 480,
-      artworkUrl: null,
-      streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-      genre: 'Classical',
-      source: 'musopen',
-      license: 'Public Domain',
-    },
-    {
-      id: 'mock-2',
-      title: 'Moonlight Sonata',
-      artist: 'Ludwig van Beethoven',
-      album: 'Piano Sonatas',
-      duration: 390,
-      artworkUrl: null,
-      streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-      genre: 'Classical',
-      source: 'musopen',
-      license: 'Public Domain',
-    },
-    {
-      id: 'mock-3',
-      title: 'The Four Seasons — Spring',
-      artist: 'Antonio Vivaldi',
-      album: 'The Four Seasons',
-      duration: 330,
-      artworkUrl: null,
-      streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-      genre: 'Classical',
-      source: 'musopen',
-      license: 'Public Domain',
-    },
-    {
-      id: 'mock-4',
-      title: 'Brandenburg Concerto No. 3',
-      artist: 'Johann Sebastian Bach',
-      album: 'Brandenburg Concertos',
-      duration: 510,
-      artworkUrl: null,
-      streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
-      genre: 'Classical',
-      source: 'musopen',
-      license: 'Public Domain',
-    },
-    {
-      id: 'mock-5',
-      title: 'Eine Kleine Nachtmusik',
-      artist: 'Wolfgang Amadeus Mozart',
-      album: 'Mozart Serenades',
-      duration: 360,
-      artworkUrl: null,
-      streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
-      genre: 'Classical',
-      source: 'musopen',
-      license: 'Public Domain',
-    },
-    {
-      id: 'mock-6',
-      title: 'Clair de Lune',
-      artist: 'Claude Debussy',
-      album: 'Suite Bergamasque',
-      duration: 290,
-      artworkUrl: null,
-      streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
-      genre: 'Classical',
-      source: 'musopen',
-      license: 'Public Domain',
-    },
-    {
-      id: 'mock-7',
-      title: 'Für Elise',
-      artist: 'Ludwig van Beethoven',
-      album: 'Piano Pieces',
-      duration: 175,
-      artworkUrl: null,
-      streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3',
-      genre: 'Classical',
-      source: 'musopen',
-      license: 'Public Domain',
-    },
-    {
-      id: 'mock-8',
-      title: 'Waltz in D-flat Major (Minute Waltz)',
-      artist: 'Frédéric Chopin',
-      album: 'Waltzes',
-      duration: 130,
-      artworkUrl: null,
-      streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
-      genre: 'Classical',
-      source: 'musopen',
-      license: 'Public Domain',
-    },
-  ];
-}
-
-function getMockArtists() {
-  return [
-    { id: 'a1', name: 'Ludwig van Beethoven', bio: 'German composer (1770–1827)', imageUrl: null, era: 'Classical/Romantic', source: 'musopen' },
-    { id: 'a2', name: 'Wolfgang Amadeus Mozart', bio: 'Austrian composer (1756–1791)', imageUrl: null, era: 'Classical', source: 'musopen' },
-    { id: 'a3', name: 'Johann Sebastian Bach', bio: 'German composer (1685–1750)', imageUrl: null, era: 'Baroque', source: 'musopen' },
-    { id: 'a4', name: 'Frédéric Chopin', bio: 'Polish composer (1810–1849)', imageUrl: null, era: 'Romantic', source: 'musopen' },
-    { id: 'a5', name: 'Antonio Vivaldi', bio: 'Italian composer (1678–1741)', imageUrl: null, era: 'Baroque', source: 'musopen' },
-    { id: 'a6', name: 'Claude Debussy', bio: 'French composer (1862–1918)', imageUrl: null, era: 'Impressionist', source: 'musopen' },
-  ];
-}
 
 module.exports = MusicProvider;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,15 +9,17 @@ import TrackCard from '../../components/TrackCard';
 import EmptyState from '../../components/EmptyState';
 import { usePlayer } from '../../store/PlayerContext';
 import { deduplicateTracks } from '../../utils/helpers';
+import { TrackSkeleton, SkeletonBox } from '../../components/SkeletonLoader';
 
 export default function ArtistScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { loadAndPlay } = usePlayer();
+  const { loadAndPlay, addMultipleToQueue } = usePlayer();
 
   const [artist, setArtist] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [addedQueue, setAddedQueue] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -30,8 +32,20 @@ export default function ArtistScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.center]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={styles.screen}>
+        <View style={styles.heroSkeleton}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <SkeletonBox width={110} height={110} borderRadius={55} style={{ marginTop: 40 }} />
+          <SkeletonBox width={180} height={22} borderRadius={4} style={{ marginTop: 14 }} />
+          <SkeletonBox width={100} height={14} borderRadius={4} style={{ marginTop: 8 }} />
+        </View>
+        <View style={{ marginTop: 24 }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <TrackSkeleton key={i} />
+          ))}
+        </View>
       </View>
     );
   }
@@ -39,6 +53,14 @@ export default function ArtistScreen() {
   if (!artist) {
     return <EmptyState icon="person" title="Artist not found" />;
   }
+
+  const handleQueueAll = () => {
+    if (tracks.length && addMultipleToQueue) {
+      addMultipleToQueue(tracks);
+      setAddedQueue(true);
+      setTimeout(() => setAddedQueue(false), 1500);
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -50,6 +72,10 @@ export default function ArtistScreen() {
         )}
         contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
         ListHeaderComponent={
           <>
             <LinearGradient
@@ -72,15 +98,32 @@ export default function ArtistScreen() {
                 <Text style={styles.bio} numberOfLines={4}>{artist.bio}</Text>
               ) : null}
               {tracks.length > 0 && (
-                <TouchableOpacity
-                  style={styles.playAllBtn}
-                  onPress={() => loadAndPlay(tracks[0], tracks, 0)}
-                >
-                  <LinearGradient colors={[Colors.primary, Colors.accentGlow]} style={styles.playAllGrad}>
-                    <Ionicons name="play" size={20} color={Colors.white} />
-                    <Text style={styles.playAllText}>Play All</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                <View style={styles.heroActionsRow}>
+                  <TouchableOpacity
+                    style={styles.playAllBtn}
+                    onPress={() => loadAndPlay(tracks[0], tracks, 0)}
+                  >
+                    <LinearGradient colors={[Colors.primary, Colors.accentGlow]} style={styles.playAllGrad}>
+                      <Ionicons name="play" size={20} color={Colors.white} />
+                      <Text style={styles.playAllText}>Play All</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.queueAllBtn, addedQueue && styles.queueBtnSuccess]}
+                    onPress={handleQueueAll}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={addedQueue ? "checkmark-circle" : "add-circle-outline"}
+                      size={18}
+                      color={addedQueue ? Colors.success : Colors.primaryLight}
+                    />
+                    <Text style={[styles.queueBtnText, addedQueue && { color: Colors.success }]}>
+                      {addedQueue ? "Queued!" : "+ Queue All"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </LinearGradient>
 
@@ -101,6 +144,12 @@ export default function ArtistScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   center: { alignItems: 'center', justifyContent: 'center' },
+  heroSkeleton: {
+    paddingTop: 54,
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+  },
   hero: {
     paddingTop: 54,
     paddingBottom: Spacing['2xl'],
@@ -143,15 +192,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     marginTop: Spacing.sm,
   },
-  playAllBtn: { marginTop: Spacing.base, borderRadius: Radius.full, overflow: 'hidden' },
+  heroActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginTop: Spacing.base,
+  },
+  playAllBtn: { borderRadius: Radius.full, overflow: 'hidden' },
   playAllGrad: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingVertical: 12,
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
   },
   playAllText: { fontFamily: Typography.fontFamily.semibold, fontSize: Typography.fontSize.base, color: Colors.white },
+  queueAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  queueBtnSuccess: {
+    borderColor: Colors.success,
+    backgroundColor: Colors.success + '18',
+  },
+  queueBtnText: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.primaryLight,
+  },
   tracksHeader: {
     flexDirection: 'row',
     alignItems: 'center',

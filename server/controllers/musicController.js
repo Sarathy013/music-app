@@ -1,29 +1,51 @@
 const MusicAggregator = require('../services/musicAggregator');
 
+function parseBoundedInteger(value, fallback, maximum) {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= maximum ? parsed : null;
+}
+
 // GET /api/music/search?q=...&type=tracks|composers|albums&limit=20&page=1&language=all|tamil|hindi|english&source=all|saavn|youtube|spotify
 exports.search = async (req, res, next) => {
   try {
     const { q, type = 'tracks', limit = 20, page = 1, language = 'all', source = 'all' } = req.query;
-    if (!q) return res.status(400).json({ success: false, message: 'Query parameter q is required.' });
+    if (typeof q !== 'string' || !q.trim() || q.trim().length > 200) {
+      return res.status(400).json({ success: false, message: 'Query parameter q must be between 1 and 200 characters.' });
+    }
+    if (!['tracks', 'composers', 'artists', 'albums'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'type must be tracks, artists, composers, or albums.' });
+    }
+    const parsedLimit = parseBoundedInteger(limit, 20, 100);
+    const parsedPage = parseBoundedInteger(page, 1, 1000);
+    if (parsedLimit === null || parsedPage === null) {
+      return res.status(400).json({ success: false, message: 'limit must be 1-100 and page must be 1-1000.' });
+    }
+    if (typeof language !== 'string' || !/^[a-z-]{1,24}$/i.test(language)) {
+      return res.status(400).json({ success: false, message: 'language must be a valid language code.' });
+    }
+    if (!['all', 'saavn', 'youtube', 'spotify', 'jamendo', 'musopen'].includes(source)) {
+      return res.status(400).json({ success: false, message: 'unsupported music source.' });
+    }
 
     let results = [];
     if (type === 'tracks') {
-      results = await MusicAggregator.searchTracks(q, {
-        limit: Number(limit),
-        page: Number(page),
+      results = await MusicAggregator.searchTracks(q.trim(), {
+        limit: parsedLimit,
+        page: parsedPage,
         language,
         source,
       });
     } else if (type === 'composers' || type === 'artists') {
-      results = await MusicAggregator.searchComposers(q, Number(limit));
+      results = await MusicAggregator.searchComposers(q.trim(), parsedLimit);
     } else if (type === 'albums') {
-      results = await MusicAggregator.searchAlbums(q, Number(limit));
+      results = await MusicAggregator.searchAlbums(q.trim(), parsedLimit);
     }
 
     res.json({
       success: true,
       results,
-      query: q,
+      query: q.trim(),
       type,
       language,
       source,
@@ -38,7 +60,9 @@ exports.search = async (req, res, next) => {
 exports.getTrending = async (req, res, next) => {
   try {
     const { limit = 20, language = 'all' } = req.query;
-    const tracks = await MusicAggregator.getTrending(Number(limit), language);
+    const parsedLimit = parseBoundedInteger(limit, 20, 100);
+    if (parsedLimit === null) return res.status(400).json({ success: false, message: 'limit must be between 1 and 100.' });
+    const tracks = await MusicAggregator.getTrending(parsedLimit, language);
     res.json({ success: true, tracks, language });
   } catch (err) {
     next(err);
@@ -49,7 +73,9 @@ exports.getTrending = async (req, res, next) => {
 exports.getNewReleases = async (req, res, next) => {
   try {
     const { limit = 20, language = 'all' } = req.query;
-    const tracks = await MusicAggregator.getNewReleases(Number(limit), language);
+    const parsedLimit = parseBoundedInteger(limit, 20, 100);
+    if (parsedLimit === null) return res.status(400).json({ success: false, message: 'limit must be between 1 and 100.' });
+    const tracks = await MusicAggregator.getNewReleases(parsedLimit, language);
     res.json({ success: true, tracks, language });
   } catch (err) {
     next(err);
@@ -106,8 +132,9 @@ exports.getGenres = async (req, res, next) => {
 // GET /api/music/genres/:id/tracks
 exports.getGenreTracks = async (req, res, next) => {
   try {
-    const { limit = 20 } = req.query;
-    const tracks = await MusicAggregator.getTracksByGenre(req.params.id, Number(limit));
+    const parsedLimit = parseBoundedInteger(req.query.limit, 20, 100);
+    if (parsedLimit === null) return res.status(400).json({ success: false, message: 'limit must be between 1 and 100.' });
+    const tracks = await MusicAggregator.getTracksByGenre(req.params.id, parsedLimit);
     res.json({ success: true, tracks, genre: req.params.id });
   } catch (err) {
     next(err);
@@ -117,8 +144,9 @@ exports.getGenreTracks = async (req, res, next) => {
 // GET /api/music/artists
 exports.getPopularArtists = async (req, res, next) => {
   try {
-    const { limit = 12 } = req.query;
-    const artists = await MusicAggregator.getPopularArtists(Number(limit));
+    const parsedLimit = parseBoundedInteger(req.query.limit, 12, 100);
+    if (parsedLimit === null) return res.status(400).json({ success: false, message: 'limit must be between 1 and 100.' });
+    const artists = await MusicAggregator.getPopularArtists(parsedLimit);
     res.json({ success: true, artists });
   } catch (err) {
     next(err);
@@ -131,6 +159,19 @@ exports.getTrack = async (req, res, next) => {
     const track = await MusicAggregator.getTrack(req.params.id);
     if (!track) return res.status(404).json({ success: false, message: 'Track not found.' });
     res.json({ success: true, track });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/music/popular-albums?limit=12&language=all
+exports.getPopularAlbums = async (req, res, next) => {
+  try {
+    const { language = 'all' } = req.query;
+    const parsedLimit = parseBoundedInteger(req.query.limit, 12, 100);
+    if (parsedLimit === null) return res.status(400).json({ success: false, message: 'limit must be between 1 and 100.' });
+    const albums = await MusicAggregator.getPopularAlbums(parsedLimit, language);
+    res.json({ success: true, albums, language });
   } catch (err) {
     next(err);
   }
@@ -167,12 +208,17 @@ exports.getLyrics = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'title is required' });
     }
 
+    const parsedDuration = duration === undefined ? undefined : Number(duration);
+    if (duration !== undefined && (!Number.isFinite(parsedDuration) || parsedDuration < 0 || parsedDuration > 86400)) {
+      return res.status(400).json({ success: false, message: 'duration must be between 0 and 86400 seconds.' });
+    }
+
     const LyricsService = require('../services/lyricsService');
     const lyricsData = await LyricsService.getLyrics({
       title,
       artist,
       album,
-      duration: duration ? Number(duration) : undefined,
+      duration: parsedDuration,
     });
 
     if (!lyricsData) {
@@ -240,6 +286,50 @@ exports.streamAudio = async (req, res, next) => {
 
     res.status(response.status);
     response.data.pipe(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/music/mood-recommendations?mood=sad|love|happy|party|chill|workout|rain|devotional&language=all|tamil|hindi|english|telugu&limit=30
+exports.getMoodRecommendations = async (req, res, next) => {
+  try {
+    const { mood = 'love', language = 'all', limit = 30 } = req.query;
+    const parsedLimit = parseBoundedInteger(limit, 30, 100);
+    if (parsedLimit === null) return res.status(400).json({ success: false, message: 'limit must be between 1 and 100.' });
+
+    const MOOD_MAP = {
+      sad: 'Sad Emotional Heartbreak Pain Melancholy Songs',
+      love: 'Romantic Love Melodies Duets Feeling Songs',
+      romantic: 'Romantic Love Melodies Duets Feeling Songs',
+      happy: 'Happy Upbeat Joyful Feel Good Celebration Hits',
+      party: 'Dance Party Club Kuthu High Bass Bangers',
+      chill: 'Chill Acoustic Lo-Fi Relaxing Soft Peaceful Songs',
+      workout: 'High Energy Workout Gym Motivation Bass Pump Songs',
+      rain: 'Rain Songs Monsoon Nostalgia Evergreen Melodies',
+      devotional: 'Devotional Spiritual Bhakti Peaceful Chants',
+      mix: 'Top Mega Superhit Melodies All Time Best Songs',
+    };
+
+    const moodKey = (mood || 'love').toLowerCase();
+    const moodQuery = MOOD_MAP[moodKey] || MOOD_MAP.love;
+
+    const langPrefix = language && language !== 'all' ? `${language} ` : '';
+    const query = `${langPrefix}${moodQuery}`;
+
+    const tracks = await MusicAggregator.searchTracks(query, {
+      limit: parsedLimit,
+      language: language.toLowerCase(),
+      source: 'all',
+    });
+
+    res.json({
+      success: true,
+      mood: moodKey,
+      language: language.toLowerCase(),
+      tracks,
+      total: tracks.length,
+    });
   } catch (err) {
     next(err);
   }

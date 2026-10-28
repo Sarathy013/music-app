@@ -72,7 +72,7 @@ export const AUDIO_QUALITY = {
 };
 
 export const APP_NAME = 'VibeStream';
-export const APP_TAGLINE = 'All the music. All for free.';
+export const APP_TAGLINE = 'Find your sound. Play it your way.';
 
 // Source display names
 export const SOURCE_LABELS = {

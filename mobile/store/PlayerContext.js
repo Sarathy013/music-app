@@ -1,10 +1,13 @@
-import React, { createContext, useContext, useReducer, useRef, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useRef, useCallback, useEffect, useState } from 'react';
 import { Platform, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { isRunningInExpoGo } from 'expo';
 import { historyAPI, musicAPI } from '../services/api';
 import { REPEAT_MODES, SLEEP_TIMER_OPTIONS } from '../constants/config';
 import { deduplicateTracks, getTrackDedupeTokens } from '../utils/helpers';
+
+const PLAYBACK_STATE_KEY = '@vibestream_last_playback_state';
 
 let Notifications = null;
 // expo-notifications remote push functionality was removed from Expo Go in SDK 53+
@@ -19,12 +22,13 @@ if (!isRunningInExpoGo() && Platform.OS !== 'web') {
         shouldSetBadge: false,
       }),
     });
-  } catch (e) {
+  } catch {
     Notifications = null;
   }
 }
 
 const PlayerContext = createContext(null);
+const PlayerProgressContext = createContext({ position: 0, duration: 0 });
 
 const initialState = {
   currentTrack: null,
@@ -75,6 +79,20 @@ function playerReducer(state, action) {
       return { ...state, sleepTimerMinutes: action.payload.minutes, sleepTimerEndsAt: action.payload.endsAt };
     case 'SET_EQ_PRESET':
       return { ...state, eqPreset: action.payload };
+    case 'RESTORE_STATE':
+      return {
+        ...state,
+        currentTrack: action.payload.track || null,
+        queue: action.payload.queue || (action.payload.track ? [action.payload.track] : []),
+        currentIndex: action.payload.currentIndex || 0,
+        position: action.payload.position || 0,
+        duration: action.payload.duration || action.payload.track?.duration || 0,
+        isShuffle: action.payload.isShuffle !== undefined ? action.payload.isShuffle : state.isShuffle,
+        repeatMode: action.payload.repeatMode !== undefined ? action.payload.repeatMode : state.repeatMode,
+        isPlaying: false,
+        isLoading: false,
+        isPlayerVisible: false,
+      };
     default:
       return state;
   }
@@ -82,10 +100,67 @@ function playerReducer(state, action) {
 
 export function PlayerProvider({ children }) {
   const [state, dispatch] = useReducer(playerReducer, initialState);
+  const [progress, setProgress] = useState({ position: 0, duration: 0 });
+  const progressRef = useRef({ position: 0, duration: 0 });
   const soundRef = useRef(null);
   const stateRef = useRef(state);
   const sleepTimerRef = useRef(null);
-  stateRef.current = state;
+  const lastSavedPosRef = useRef(0);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  // ── Playback State Persistence ─────────────────────────────────────────────
+
+  const persistState = useCallback(async (stateToSave) => {
+    try {
+      if (!stateToSave?.currentTrack) return;
+      const data = {
+        track: stateToSave.currentTrack,
+        queue: stateToSave.queue,
+        currentIndex: stateToSave.currentIndex,
+        position: stateToSave.position || 0,
+        duration: stateToSave.duration || stateToSave.currentTrack?.duration || 0,
+        isShuffle: stateToSave.isShuffle,
+        repeatMode: stateToSave.repeatMode,
+        savedAt: Date.now(),
+      };
+      await AsyncStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(data));
+    } catch {
+      // Silently ignore storage errors
+    }
+  }, []);
+
+  // Restore previous playback state when app starts
+  useEffect(() => {
+    const restorePlaybackState = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(PLAYBACK_STATE_KEY);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (saved && saved.track) {
+            dispatch({ type: 'RESTORE_STATE', payload: saved });
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to restore playback state:', err);
+      }
+    };
+    restorePlaybackState();
+  }, []);
+
+  // Save playback state when app goes to background or becomes inactive
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        persistState(stateRef.current);
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub?.remove?.();
+  }, [persistState]);
 
   // ── Audio Setup ────────────────────────────────────────────────────────────
 
@@ -132,7 +207,7 @@ export function PlayerProvider({ children }) {
         },
         trigger: null,
       });
-    } catch (e) {
+    } catch {
       // Notifications may not be available in Expo Go — silently ignore
     }
   };
@@ -156,7 +231,7 @@ export function PlayerProvider({ children }) {
     if (state.currentTrack) {
       showNowPlayingNotification(state.currentTrack, state.isPlaying);
     }
-  }, [state.currentTrack?.id, state.isPlaying]);
+  }, [state.currentTrack, state.isPlaying]);
 
   const handleTrackEnd = () => {
     const s = stateRef.current;
@@ -172,43 +247,14 @@ export function PlayerProvider({ children }) {
 
   // ── Core Player Methods ────────────────────────────────────────────────────
 
-  const loadAndPlay = async (track, queue = [], index = 0) => {
+  const loadAndPlay = async (track, queue = [], index = 0, initialSeekMs = 0) => {
+    if (!track) return;
     try {
       let playableTrack = track;
 
-      // If streamUrl is missing (e.g. raw YouTube or unresolved track), resolve on the fly
-      if (!playableTrack?.streamUrl) {
-        dispatch({ type: 'SET_LOADING', payload: true });
-        try {
-          if (playableTrack?.id) {
-            const resolved = await musicAPI.getTrack(playableTrack.id);
-            if (resolved?.track?.streamUrl) {
-              playableTrack = { ...playableTrack, ...resolved.track };
-            }
-          }
-          if (!playableTrack?.streamUrl && playableTrack?.title) {
-            const searchFallback = await musicAPI.search(`${playableTrack.title} ${playableTrack.artist || ''}`, 'tracks', 3);
-            const found = (searchFallback?.results || []).find((t) => t.streamUrl);
-            if (found) {
-              playableTrack = { ...playableTrack, streamUrl: found.streamUrl, duration: found.duration || playableTrack.duration };
-            }
-          }
-        } catch {}
-      }
-
-      if (!playableTrack?.streamUrl) {
-        dispatch({ type: 'SET_ERROR', payload: 'This track is currently unavailable. Try another track.' });
-        return;
-      }
-
-      // Safely unload previous sound without throwing
-      if (soundRef.current) {
-        try { await soundRef.current.pauseAsync?.(); } catch {}
-        try { await soundRef.current.unloadAsync?.(); } catch {}
-        soundRef.current = null;
-      }
-
-      let cleanQueue = queue;
+      // ── Instant Optimistic UI Reaction (<1ms) ─────────────────────────────────
+      // Immediately set active track & show player so the UI responds with ZERO delay
+      let cleanQueue = queue && queue.length > 0 ? queue : [playableTrack];
       let cleanIndex = index;
       if (queue && queue.length > 0) {
         cleanQueue = deduplicateTracks(queue);
@@ -222,7 +268,43 @@ export function PlayerProvider({ children }) {
       dispatch({ type: 'SET_TRACK', payload: { track: playableTrack, index: cleanIndex } });
       if (cleanQueue.length) dispatch({ type: 'SET_QUEUE', payload: cleanQueue });
       dispatch({ type: 'SHOW_PLAYER' });
-      dispatch({ type: 'SET_LOADING', payload: true });
+
+      // Safely unload previous sound asynchronously in background without blocking UI
+      const prevSound = soundRef.current;
+      soundRef.current = null;
+      if (prevSound) {
+        Promise.resolve().then(async () => {
+          try { await prevSound.pauseAsync?.(); } catch {}
+          try { await prevSound.unloadAsync?.(); } catch {}
+        });
+      }
+
+      // If streamUrl is missing (e.g. raw YouTube or unresolved track), resolve on the fly
+      if (!playableTrack?.streamUrl) {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
+          if (playableTrack?.id) {
+            const resolved = await musicAPI.getTrack(playableTrack.id);
+            if (resolved?.track?.streamUrl) {
+              playableTrack = { ...playableTrack, ...resolved.track };
+              dispatch({ type: 'SET_TRACK', payload: { track: playableTrack, index: cleanIndex } });
+            }
+          }
+          if (!playableTrack?.streamUrl && playableTrack?.title) {
+            const searchFallback = await musicAPI.search(`${playableTrack.title} ${playableTrack.artist || ''}`, 'tracks', 3);
+            const found = (searchFallback?.results || []).find((t) => t.streamUrl);
+            if (found) {
+              playableTrack = { ...playableTrack, streamUrl: found.streamUrl, duration: found.duration || playableTrack.duration };
+              dispatch({ type: 'SET_TRACK', payload: { track: playableTrack, index: cleanIndex } });
+            }
+          }
+        } catch {}
+      }
+
+      if (!playableTrack?.streamUrl) {
+        dispatch({ type: 'SET_ERROR', payload: 'This track is currently unavailable. Try another track.' });
+        return;
+      }
 
       let loadedSound = null;
       try {
@@ -238,10 +320,29 @@ export function PlayerProvider({ children }) {
             if (!status) return;
             const posMs = Math.round((status.currentTime || 0) * 1000);
             const durMs = Math.round((status.duration || 0) * 1000);
-            dispatch({ type: 'SET_POSITION', payload: posMs });
-            dispatch({ type: 'SET_DURATION', payload: durMs });
-            dispatch({ type: 'SET_PLAYING', payload: !!status.playing });
-            dispatch({ type: 'SET_LOADING', payload: !!status.isBuffering });
+
+            progressRef.current = { position: posMs, duration: durMs };
+            setProgress({ position: posMs, duration: durMs });
+
+            if (stateRef.current.isPlaying !== !!status.playing) {
+              dispatch({ type: 'SET_PLAYING', payload: !!status.playing });
+            }
+            if (stateRef.current.isLoading !== !!status.isBuffering) {
+              dispatch({ type: 'SET_LOADING', payload: !!status.isBuffering });
+            }
+
+            // Throttled persistence while playing
+            if (Math.abs(posMs - lastSavedPosRef.current) > 3000) {
+              lastSavedPosRef.current = posMs;
+              persistState({
+                ...stateRef.current,
+                currentTrack: playableTrack,
+                queue: cleanQueue,
+                currentIndex: cleanIndex,
+                position: posMs,
+                duration: durMs,
+              });
+            }
 
             if (status.didJustFinish) {
               handleTrackEnd();
@@ -249,6 +350,13 @@ export function PlayerProvider({ children }) {
           });
 
           player.play();
+
+          if (initialSeekMs > 0) {
+            try {
+              await player.seekTo(initialSeekMs / 1000);
+              dispatch({ type: 'SET_POSITION', payload: initialSeekMs });
+            } catch {}
+          }
 
           // Enable lock screen controls with track metadata (required on Android for sustained background playback)
           if (Platform.OS !== 'web') {
@@ -291,11 +399,26 @@ export function PlayerProvider({ children }) {
       } catch (audioErr) {
         console.warn('expo-audio createAudioPlayer error:', audioErr?.message || audioErr);
         if (Platform.OS === 'web' && typeof window !== 'undefined' && window.Audio) {
-          const htmlAudio = new window.Audio(playableTrack.streamUrl);
+          const htmlAudio = new window.Audio();
+          htmlAudio.preload = 'auto';
+          htmlAudio.src = playableTrack.streamUrl;
           htmlAudio.volume = stateRef.current.volume;
           htmlAudio.ontimeupdate = () => {
-            dispatch({ type: 'SET_POSITION', payload: (htmlAudio.currentTime || 0) * 1000 });
-            dispatch({ type: 'SET_DURATION', payload: (htmlAudio.duration || 0) * 1000 });
+            const pos = (htmlAudio.currentTime || 0) * 1000;
+            const dur = (htmlAudio.duration || 0) * 1000;
+            progressRef.current = { position: pos, duration: dur };
+            setProgress({ position: pos, duration: dur });
+            if (Math.abs(pos - lastSavedPosRef.current) > 3000) {
+              lastSavedPosRef.current = pos;
+              persistState({
+                ...stateRef.current,
+                currentTrack: playableTrack,
+                queue: cleanQueue,
+                currentIndex: cleanIndex,
+                position: pos,
+                duration: dur,
+              });
+            }
           };
           htmlAudio.onplaying = () => {
             dispatch({ type: 'SET_PLAYING', payload: true });
@@ -314,6 +437,10 @@ export function PlayerProvider({ children }) {
 
           await htmlAudio.play();
 
+          if (initialSeekMs > 0) {
+            try { htmlAudio.currentTime = initialSeekMs / 1000; } catch {}
+          }
+
           loadedSound = {
             unloadAsync: async () => { htmlAudio.pause(); htmlAudio.src = ''; },
             pauseAsync: async () => { htmlAudio.pause(); dispatch({ type: 'SET_PLAYING', payload: false }); },
@@ -330,6 +457,16 @@ export function PlayerProvider({ children }) {
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_PLAYING', payload: true });
 
+      // Save playback state
+      persistState({
+        ...stateRef.current,
+        currentTrack: playableTrack,
+        queue: cleanQueue,
+        currentIndex: cleanIndex,
+        position: initialSeekMs || 0,
+        duration: playableTrack.duration || 0,
+      });
+
       // Log to history (fire-and-forget)
       historyAPI.add(track).catch(() => {});
     } catch (err) {
@@ -339,14 +476,27 @@ export function PlayerProvider({ children }) {
   };
 
   const togglePlayPause = async () => {
-    if (!soundRef.current) return;
+    if (!soundRef.current) {
+      if (stateRef.current.currentTrack) {
+        // Resuming restored track from previous session
+        await loadAndPlay(
+          stateRef.current.currentTrack,
+          stateRef.current.queue,
+          stateRef.current.currentIndex,
+          stateRef.current.position
+        );
+      }
+      return;
+    }
     try {
       if (stateRef.current.isPlaying) {
         await soundRef.current.pauseAsync();
         dispatch({ type: 'SET_PLAYING', payload: false });
+        persistState({ ...stateRef.current, isPlaying: false });
       } else {
         await soundRef.current.playAsync();
         dispatch({ type: 'SET_PLAYING', payload: true });
+        persistState({ ...stateRef.current, isPlaying: true });
       }
     } catch (err) {
       console.warn('togglePlayPause error:', err);
@@ -358,21 +508,31 @@ export function PlayerProvider({ children }) {
       try {
         await soundRef.current.playAsync();
         dispatch({ type: 'SET_PLAYING', payload: true });
+        persistState({ ...stateRef.current, isPlaying: true });
       } catch (err) {
         console.warn('playCurrentSound error:', err);
       }
+    } else if (stateRef.current.currentTrack) {
+      await loadAndPlay(
+        stateRef.current.currentTrack,
+        stateRef.current.queue,
+        stateRef.current.currentIndex,
+        stateRef.current.position
+      );
     }
   };
 
   const seekTo = async (positionMs) => {
+    progressRef.current = { ...progressRef.current, position: positionMs };
+    setProgress((prev) => ({ ...prev, position: positionMs }));
     if (soundRef.current) {
       try {
         await soundRef.current.setPositionAsync(positionMs);
-        dispatch({ type: 'SET_POSITION', payload: positionMs });
       } catch (err) {
         console.warn('seekTo error:', err);
       }
     }
+    persistState({ ...stateRef.current, position: positionMs });
   };
 
   const setVolume = async (vol) => {
@@ -391,7 +551,7 @@ export function PlayerProvider({ children }) {
     if (!s.queue.length) return;
     let nextIndex;
     if (s.isShuffle) {
-      nextIndex = Math.floor(Math.random() * s.queue.length);
+      nextIndex = getRandomQueueIndex(s.queue.length);
     } else {
       nextIndex = (s.currentIndex + 1) % s.queue.length;
     }
@@ -426,6 +586,7 @@ export function PlayerProvider({ children }) {
       try { await soundRef.current.unloadAsync?.(); } catch {}
       soundRef.current = null;
     }
+    await AsyncStorage.removeItem(PLAYBACK_STATE_KEY).catch(() => {});
     dispatch({ type: 'SET_TRACK', payload: { track: null, index: 0 } });
     dispatch({ type: 'SET_PLAYING', payload: false });
     dispatch({ type: 'HIDE_PLAYER' });
@@ -434,6 +595,11 @@ export function PlayerProvider({ children }) {
   // ── Sleep Timer ────────────────────────────────────────────────────────────
 
   const setSleepTimer = (minutes) => {
+    if (!SLEEP_TIMER_OPTIONS.includes(minutes)) {
+      console.warn('Unsupported sleep timer duration:', minutes);
+      return;
+    }
+
     // Clear existing timer
     if (sleepTimerRef.current) {
       clearTimeout(sleepTimerRef.current);
@@ -483,6 +649,10 @@ export function PlayerProvider({ children }) {
   const addToQueue = (track) => {
     if (!track) return;
     const s = stateRef.current;
+    if (!s.currentTrack) {
+      loadAndPlay(track, [track], 0);
+      return;
+    }
     const trackTokens = getTrackDedupeTokens(track);
     const exists = s.queue.some(
       (t) => String(t.id) === String(track.id) || getTrackDedupeTokens(t).some((tk) => trackTokens.includes(tk))
@@ -492,23 +662,58 @@ export function PlayerProvider({ children }) {
     }
   };
 
-  const addNextInQueue = (track) => {
-    if (!track) return;
+  const addMultipleToQueue = (tracks) => {
+    if (!Array.isArray(tracks) || tracks.length === 0) return 0;
     const s = stateRef.current;
-    const trackTokens = getTrackDedupeTokens(track);
-    const exists = s.queue.some(
-      (t) => String(t.id) === String(track.id) || getTrackDedupeTokens(t).some((tk) => trackTokens.includes(tk))
-    );
-    if (!exists) {
-      const newQueue = [...s.queue];
-      newQueue.splice(s.currentIndex + 1, 0, track);
-      dispatch({ type: 'SET_QUEUE', payload: newQueue });
+    const currentTokens = new Set();
+    const currentIds = new Set();
+    s.queue.forEach((t) => {
+      if (t?.id) currentIds.add(String(t.id));
+      getTrackDedupeTokens(t).forEach((tok) => currentTokens.add(tok));
+    });
+
+    const toAdd = [];
+    for (const t of tracks) {
+      if (!t || !t.id || currentIds.has(String(t.id))) continue;
+      const tokens = getTrackDedupeTokens(t);
+      const isDup = tokens.some((tok) => currentTokens.has(tok));
+      if (isDup) continue;
+      tokens.forEach((tok) => currentTokens.add(tok));
+      currentIds.add(String(t.id));
+      toAdd.push(t);
     }
+
+    if (toAdd.length > 0) {
+      dispatch({ type: 'SET_QUEUE', payload: [...s.queue, ...toAdd] });
+    }
+    return toAdd.length;
+  };
+
+  const addNextInQueue = (track) => {
+    if (!track?.id) return false;
+
+    const s = stateRef.current;
+    const tokens = getTrackDedupeTokens(track);
+    const isDuplicate = s.queue.some((queuedTrack) =>
+      String(queuedTrack.id) === String(track.id) ||
+      getTrackDedupeTokens(queuedTrack).some((token) => tokens.includes(token))
+    );
+    if (isDuplicate) return false;
+
+    const nextQueue = [...s.queue];
+    const insertIndex = s.currentTrack
+      ? Math.min(s.currentIndex + 1, nextQueue.length)
+      : nextQueue.length;
+    nextQueue.splice(insertIndex, 0, track);
+    dispatch({ type: 'SET_QUEUE', payload: nextQueue });
+    return true;
   };
 
   return (
     <PlayerContext.Provider value={{
       ...state,
+      position: progress.position,
+      duration: progress.duration,
       loadAndPlay,
       togglePlayPause,
       seekTo,
@@ -525,15 +730,27 @@ export function PlayerProvider({ children }) {
       playFromQueue,
       removeFromQueue,
       addToQueue,
+      addMultipleToQueue,
       addNextInQueue,
     }}>
-      {children}
+      <PlayerProgressContext.Provider value={progress}>
+        {children}
+      </PlayerProgressContext.Provider>
     </PlayerContext.Provider>
   );
+}
+
+function getRandomQueueIndex(length) {
+  return Math.floor(Math.random() * length);
 }
 
 export const usePlayer = () => {
   const ctx = useContext(PlayerContext);
   if (!ctx) throw new Error('usePlayer must be used inside PlayerProvider');
   return ctx;
+};
+
+export const usePlayerProgress = () => {
+  const ctx = useContext(PlayerProgressContext);
+  return ctx || { position: 0, duration: 0 };
 };

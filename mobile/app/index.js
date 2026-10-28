@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { View, Text, StyleSheet, Animated, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,8 +8,8 @@ import { Colors, Typography } from '../constants/theme';
 export default function IndexScreen() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.8)).current;
+  const [opacity] = useState(() => new Animated.Value(0));
+  const [scale] = useState(() => new Animated.Value(0.8));
 
   useEffect(() => {
     Animated.parallel([
@@ -27,7 +27,7 @@ export default function IndexScreen() {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, isAuthenticated]);
+  }, [isLoading, isAuthenticated, opacity, router, scale]);
 
   return (
     <LinearGradient

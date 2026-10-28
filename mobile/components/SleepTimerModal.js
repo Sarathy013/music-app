@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal, Animated,
   ScrollView,
@@ -19,8 +19,9 @@ function formatCountdown(ms) {
 
 export default function SleepTimerModal({ visible, onClose }) {
   const { setSleepTimer, sleepTimerMinutes, sleepTimerEndsAt } = usePlayer();
-  const slideAnim = useRef(new Animated.Value(400)).current;
-  const [countdown, setCountdown] = useState(null);
+  const [slideAnim] = useState(() => new Animated.Value(400));
+  const [now, setNow] = useState(null);
+  const countdown = sleepTimerEndsAt && now !== null ? Math.max(sleepTimerEndsAt - now, 0) : null;
 
   useEffect(() => {
     if (visible) {
@@ -28,24 +29,17 @@ export default function SleepTimerModal({ visible, onClose }) {
     } else {
       Animated.timing(slideAnim, { toValue: 400, duration: 250, useNativeDriver: true }).start();
     }
-  }, [visible]);
+  }, [visible, slideAnim]);
 
   // Live countdown
   useEffect(() => {
-    if (!sleepTimerEndsAt) {
-      setCountdown(null);
-      return;
-    }
-    const interval = setInterval(() => {
-      const remaining = sleepTimerEndsAt - Date.now();
-      if (remaining <= 0) {
-        setCountdown(null);
-        clearInterval(interval);
-      } else {
-        setCountdown(remaining);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
+    if (!sleepTimerEndsAt) return;
+    const initialUpdate = setTimeout(() => setNow(Date.now()), 0);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearTimeout(initialUpdate);
+      clearInterval(interval);
+    };
   }, [sleepTimerEndsAt]);
 
   const handleSelect = (minutes) => {
@@ -71,7 +65,7 @@ export default function SleepTimerModal({ visible, onClose }) {
             </View>
             <View>
               <Text style={styles.title}>Sleep Timer</Text>
-              {countdown !== null ? (
+              {countdown !== null && countdown > 0 ? (
                 <Text style={styles.countdown}>Stops in {formatCountdown(countdown)}</Text>
               ) : (
                 <Text style={styles.subtitle}>Pause music after a set time</Text>

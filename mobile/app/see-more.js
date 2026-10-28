@@ -12,7 +12,7 @@ import { usePlayer } from '../store/PlayerContext';
 import TrackCard from '../components/TrackCard';
 import { TrackSkeleton } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
-import { deduplicateTracks, getTrackDedupeKey, getTrackDedupeTokens } from '../utils/helpers';
+import { deduplicateTracks, getTrackDedupeTokens } from '../utils/helpers';
 
 const LANGUAGES = [
   { id: 'all', label: '🌐 All Languages', color: Colors.primary, badge: 'All' },
@@ -246,15 +246,16 @@ export default function SeeMoreScreen() {
   }, [selectedEra]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Load music for the selected era.
     loadAllMusic(selectedEra);
-  }, [selectedEra]);
+  }, [loadAllMusic, selectedEra]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadAllMusic(selectedEra);
   };
 
-  const filterTracks = (tracksList) => {
+  const filterTracks = useCallback((tracksList) => {
     if (!tracksList || !Array.isArray(tracksList)) return [];
     const seenIds = new Set();
     const seenTokens = new Set();
@@ -276,9 +277,9 @@ export default function SeeMoreScreen() {
         (t.album && t.album.toLowerCase().includes(q))
       );
     });
-  };
+  }, [searchQuery]);
 
-  const getLanguageTracks = (langKey) => {
+  const getLanguageTracks = useCallback((langKey) => {
     const data = languagesData[langKey];
     if (!data) return [];
     if (selectedEra === 'new' && data.newTracks?.length) {
@@ -288,7 +289,7 @@ export default function SeeMoreScreen() {
       return data.oldTracks;
     }
     return data.tracks || [];
-  };
+  }, [languagesData, selectedEra]);
 
   const {
     tamilTracks,
@@ -333,7 +334,7 @@ export default function SeeMoreScreen() {
       punjabiTracks: dedupeCross(rawPunjabi),
       kannadaTracks: dedupeCross(rawKannada),
     };
-  }, [languagesData, selectedEra, searchQuery, selectedLang]);
+  }, [filterTracks, getLanguageTracks, selectedLang]);
 
   const allVisibleTracks = useMemo(() => {
     return deduplicateTracks([

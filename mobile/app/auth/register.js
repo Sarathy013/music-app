@@ -70,7 +70,7 @@ export default function RegisterScreen() {
               <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
             <Text style={s.title}>Create Account</Text>
-            <Text style={s.subtitle}>Join FreeBeat — it's completely free.</Text>
+            <Text style={s.subtitle}>Join FreeBeat — it&apos;s completely free.</Text>
           </View>
 
           <View style={{ gap: Spacing.base }}>

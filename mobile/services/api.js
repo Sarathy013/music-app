@@ -115,6 +115,7 @@ const apiFetch = async (endpoint, options = {}) => {
 export const authAPI = {
   register: (body) => apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) => apiFetch('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  googleLogin: (body) => apiFetch('/auth/google', { method: 'POST', body: JSON.stringify(body) }),
   getMe: () => apiFetch('/auth/me'),
   updateProfile: (body) => apiFetch('/auth/profile', { method: 'PUT', body: JSON.stringify(body) }),
   changePassword: (body) => apiFetch('/auth/change-password', { method: 'PUT', body: JSON.stringify(body) }),
@@ -131,6 +132,8 @@ export const musicAPI = {
     apiFetch(`/music/new-releases?limit=${limit}&language=${encodeURIComponent(language)}`),
   getCharts: (language = 'all') =>
     apiFetch(`/music/charts?language=${encodeURIComponent(language)}`),
+  getMoodRecommendations: (mood = 'love', language = 'all', limit = 30) =>
+    apiFetch(`/music/mood-recommendations?mood=${encodeURIComponent(mood)}&language=${encodeURIComponent(language)}&limit=${limit}`),
   getAllLanguages: (era = 'all') =>
     apiFetch(`/music/languages?era=${encodeURIComponent(era)}`),
   resolveLink: (url) =>
@@ -138,6 +141,7 @@ export const musicAPI = {
   getGenres: () => apiFetch('/music/genres'),
   getGenreTracks: (genreId, limit = 20) => apiFetch(`/music/genres/${genreId}/tracks?limit=${limit}`),
   getPopularArtists: (limit = 12) => apiFetch(`/music/artists?limit=${limit}`),
+  getPopularAlbums: (limit = 12, language = 'all') => apiFetch(`/music/popular-albums?limit=${limit}&language=${encodeURIComponent(language)}`),
   getTrack: (id) => apiFetch(`/music/tracks/${id}`),
   getAlbum: (id) => apiFetch(`/music/albums/${id}`),
   getArtist: (id) => apiFetch(`/music/artists/${id}`),
@@ -161,6 +165,7 @@ export const playlistAPI = {
   update: (id, body) => apiFetch(`/playlists/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (id) => apiFetch(`/playlists/${id}`, { method: 'DELETE' }),
   addTrack: (id, track) => apiFetch(`/playlists/${id}/tracks`, { method: 'POST', body: JSON.stringify(track) }),
+  addTracks: (id, tracks) => apiFetch(`/playlists/${id}/tracks`, { method: 'POST', body: JSON.stringify({ tracks }) }),
   removeTrack: (id, trackId) => apiFetch(`/playlists/${id}/tracks/${trackId}`, { method: 'DELETE' }),
 };
 

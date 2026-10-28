@@ -18,7 +18,8 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authorized. No token.' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const JWT_SECRET = process.env.JWT_SECRET || 'vibestream_jwt_secret_dev_key_2026';
+    const decoded = jwt.verify(token, JWT_SECRET);
 
     if (isDbConnected()) {
       req.user = await User.findById(decoded.id).select('-password');

@@ -36,7 +36,8 @@ Render is ideal for hosting Node.js Express APIs with automatic HTTPS.
 5. Under **Environment Variables**, add:
    - `NODE_ENV`: `production`
    - `JWT_SECRET`: *(A long random secret string)*
-   - `JAMENDO_CLIENT_ID`: `3dce8b55`
+   - `JAMENDO_CLIENT_ID`: Register an application at [Jamendo Developers](https://developer.jamendo.com/)
+   - `MUSOPEN_API_KEY`: Optional token from Musopen for its classical catalog
    - *(Optional)* `MONGODB_URI`: Your MongoDB Atlas URI. *(Note: If omitted or Atlas IP is not whitelisted, the server seamlessly runs with its persistent local JSON store).*
 6. Click **Deploy**. Your backend will be live at `https://<your-app-name>.onrender.com`.
 
@@ -142,7 +143,8 @@ npx expo start -c
 | `JWT_SECRET` | Secret key for JWT auth | Any 64+ character string |
 | `JWT_EXPIRES_IN` | Token duration | `7d` |
 | `MONGODB_URI` | MongoDB Atlas Connection String | *(Optional)* |
-| `JAMENDO_CLIENT_ID`| Free CC Music API client ID | `3dce8b55` |
+| `JAMENDO_CLIENT_ID`| Jamendo application client ID | Register at developer.jamendo.com |
+| `MUSOPEN_API_KEY` | Optional Musopen API token | Obtain from Musopen |
 
 ### Mobile (`mobile/.env`)
 | Variable | Description |
@@ -151,11 +153,14 @@ npx expo start -c
 
 ---
 
-## ✨ Features Verified & Operational
-- ✅ **Multi-source streaming**: JioSaavn 320kbps + YouTube Music fallback + Jamendo CC audio.
-- ✅ **Background playback**: Sustained background audio with lock-screen controls and media notification metadata (`expo-audio`).
-- ✅ **Real-time synchronized lyrics**: Spotify-style animated lyric line tracking and seek interaction.
-- ✅ **Offline song downloads**: Track caching to local device storage.
-- ✅ **Custom playlists & deduplication**: Smart duplicate detection and one-tap removal.
-- ✅ **Dynamic EQ presets & sleep timer**: Multiple audio equalization presets and auto-off timer.
-- ✅ **Cloud ready**: Reverse proxy trust, health-check endpoints, stream socket cleanup, and rate limiting configured.
+## Music catalog configuration
+
+The app can search Jamendo and Musopen alongside its existing catalog
+integrations. Set `JAMENDO_CLIENT_ID` and, if available, `MUSOPEN_API_KEY` on
+the backend to enable those catalogs. Provider availability and track licenses
+vary; review the license or rights information supplied by each provider before
+redistribution or offline use. A failed provider request returns no tracks from
+that provider rather than substituting unrelated demo audio.
+
+The app's own playlists are stored per user and can contain tracks returned by
+any configured catalog provider.

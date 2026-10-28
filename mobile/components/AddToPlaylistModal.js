@@ -20,9 +20,19 @@ import { playlistAPI } from '../services/api';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+export let cachedPlaylists = null;
+
+// Preload playlists cache in background so modal opens with ZERO wait
+(async () => {
+  try {
+    const res = await playlistAPI.getAll();
+    if (res?.playlists) cachedPlaylists = res.playlists;
+  } catch {}
+})();
+
 export default function AddToPlaylistModal({ visible, track, onClose }) {
-  const [playlists, setPlaylists] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [playlists, setPlaylists] = useState(cachedPlaylists || []);
+  const [loading, setLoading] = useState(!cachedPlaylists);
   const [addingId, setAddingId] = useState(null);
   const [addedId, setAddedId] = useState(null);
   const [showCreateInput, setShowCreateInput] = useState(false);
@@ -31,10 +41,10 @@ export default function AddToPlaylistModal({ visible, track, onClose }) {
   const [notification, setNotification] = useState(null);
 
   // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(450)).current;
-  const toastAnim = useRef(new Animated.Value(0)).current;
-  const checkScaleAnim = useRef(new Animated.Value(0)).current;
+  const [fadeAnim] = useState(() => new Animated.Value(0));
+  const [slideAnim] = useState(() => new Animated.Value(450));
+  const [toastAnim] = useState(() => new Animated.Value(0));
+  const [checkScaleAnim] = useState(() => new Animated.Value(0));
 
   const autoCloseTimerRef = useRef(null);
   const errorTimerRef = useRef(null);
@@ -42,6 +52,7 @@ export default function AddToPlaylistModal({ visible, track, onClose }) {
   // Animate opening/closing
   useEffect(() => {
     if (visible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset transient state when the modal opens.
       setAddedId(null);
       setNotification(null);
       setShowCreateInput(false);
@@ -67,9 +78,9 @@ export default function AddToPlaylistModal({ visible, track, onClose }) {
     }
 
     return () => clearTimers();
-  }, [visible]);
+  }, [visible, fadeAnim, slideAnim]);
 
-  const clearTimers = () => {
+  function clearTimers() {
     if (autoCloseTimerRef.current) {
       clearTimeout(autoCloseTimerRef.current);
       autoCloseTimerRef.current = null;
@@ -78,7 +89,7 @@ export default function AddToPlaylistModal({ visible, track, onClose }) {
       clearTimeout(errorTimerRef.current);
       errorTimerRef.current = null;
     }
-  };
+  }
 
   const handleClose = () => {
     clearTimers();
@@ -109,22 +120,57 @@ export default function AddToPlaylistModal({ visible, track, onClose }) {
     }).start();
   };
 
-  const loadPlaylists = async () => {
-    setLoading(true);
+  async function loadPlaylists() {
+    if (!cachedPlaylists) setLoading(true);
     try {
       const res = await playlistAPI.getAll();
-      setPlaylists(res?.playlists || []);
+      const list = res?.playlists || [];
+      cachedPlaylists = list;
+      setPlaylists(list);
     } catch (e) {
       console.warn('Failed to load playlists:', e?.message || e);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   const handleAddToPlaylist = async (playlist) => {
     if (!track) return;
     const playlistId = playlist._id || playlist.id;
     setAddingId(playlistId);
+
+    // Instant optimistic feedback (<10ms)
+    setAddedId(playlistId);
+    checkScaleAnim.setValue(0);
+    Animated.spring(checkScaleAnim, {
+      toValue: 1,
+      tension: 100,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+
+    showNotification('success', 'Added to Playlist', `Saved to "${playlist.name}"`);
+
+    // Update local playlist track list so UI reflects the addition
+    setPlaylists((prev) => {
+      const updated = prev.map((p) => {
+        if ((p._id || p.id) === playlistId) {
+          const currentTracks = p.tracks || [];
+          return {
+            ...p,
+            tracks: [...currentTracks, { trackId: track.id, title: track.title }],
+          };
+        }
+        return p;
+      });
+      cachedPlaylists = updated;
+      return updated;
+    });
+
+    // Auto-return briskly back to the music with instant visual satisfaction
+    autoCloseTimerRef.current = setTimeout(() => {
+      handleClose();
+    }, 400);
 
     try {
       await playlistAPI.addTrack(playlistId, {
@@ -136,53 +182,18 @@ export default function AddToPlaylistModal({ visible, track, onClose }) {
         artworkUrl: track.artworkUrl,
         streamUrl: track.streamUrl,
       });
-
-      // Success feedback
-      setAddedId(playlistId);
-      checkScaleAnim.setValue(0);
-      Animated.spring(checkScaleAnim, {
-        toValue: 1,
-        tension: 100,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
-
-      showNotification('success', 'Added to Playlist', `Saved to "${playlist.name}"`);
-
-      // Update local playlist track list so UI reflects the addition
-      setPlaylists((prev) =>
-        prev.map((p) => {
-          if ((p._id || p.id) === playlistId) {
-            const currentTracks = p.tracks || [];
-            return {
-              ...p,
-              tracks: [...currentTracks, { trackId: track.id, title: track.title }],
-            };
-          }
-          return p;
-        })
-      );
-
-      // Auto-return smoothly back to the music after a brief delight pause
-      autoCloseTimerRef.current = setTimeout(() => {
-        handleClose();
-      }, 750);
     } catch (err) {
       const isAlreadyAdded =
         err?.message?.toLowerCase().includes('already') ||
         err?.message?.toLowerCase().includes('exists');
 
-      showNotification(
-        isAlreadyAdded ? 'info' : 'error',
-        isAlreadyAdded ? 'Already Added' : 'Notice',
-        isAlreadyAdded
-          ? `"${track.title}" is already in ${playlist.name}`
-          : err?.message || 'Could not add to playlist'
-      );
-
-      errorTimerRef.current = setTimeout(() => {
-        setNotification(null);
-      }, 3000);
+      if (!isAlreadyAdded) {
+        showNotification(
+          'error',
+          'Notice',
+          err?.message || 'Could not add to playlist'
+        );
+      }
     } finally {
       setAddingId(null);
     }
