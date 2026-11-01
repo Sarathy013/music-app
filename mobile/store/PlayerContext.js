@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useRef, useCallback, useEffect, useState } from 'react';
-import { Platform, AppState } from 'react-native';
+import { Platform, AppState, NativeEventEmitter, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { isRunningInExpoGo } from 'expo';
@@ -106,6 +106,10 @@ export function PlayerProvider({ children }) {
   const stateRef = useRef(state);
   const sleepTimerRef = useRef(null);
   const lastSavedPosRef = useRef(0);
+  // Track whether we have already auto-played the restored session on this launch
+  const sessionRestoredRef = useRef(false);
+  // Track whether we already auto-played on bluetooth connect
+  const btPlayedRef = useRef(false);
 
   useEffect(() => {
     stateRef.current = state;
@@ -132,7 +136,7 @@ export function PlayerProvider({ children }) {
     }
   }, []);
 
-  // Restore previous playback state when app starts
+  // Restore previous playback state when app starts, then auto-play the last song
   useEffect(() => {
     const restorePlaybackState = async () => {
       try {
@@ -141,6 +145,19 @@ export function PlayerProvider({ children }) {
           const saved = JSON.parse(raw);
           if (saved && saved.track) {
             dispatch({ type: 'RESTORE_STATE', payload: saved });
+            // Auto-play the restored track from where it was left off
+            // Small delay to allow audio system to initialize
+            setTimeout(() => {
+              if (!sessionRestoredRef.current) {
+                sessionRestoredRef.current = true;
+                loadAndPlay(
+                  saved.track,
+                  saved.queue || [saved.track],
+                  saved.currentIndex || 0,
+                  saved.position || 0
+                );
+              }
+            }, 800);
           }
         }
       } catch (err) {
@@ -148,6 +165,7 @@ export function PlayerProvider({ children }) {
       }
     };
     restorePlaybackState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Save playback state when app goes to background or becomes inactive
@@ -161,6 +179,92 @@ export function PlayerProvider({ children }) {
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub?.remove?.();
   }, [persistState]);
+
+  // ── Bluetooth Auto-Resume ───────────────────────────────────────────────────
+  // When a Bluetooth audio device connects, automatically resume the last played
+  // track. This works while the app is in the foreground or background.
+  // The AndroidBluetoothReceiver native module (registered in MainActivity.kt)
+  // fires a 'bluetoothAudioConnected' event that we listen for here.
+  useEffect(() => {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') return;
+
+    let btSubscription = null;
+
+    const handleBluetoothConnected = async () => {
+      // Avoid double-triggering within the same connection event
+      if (btPlayedRef.current) return;
+      btPlayedRef.current = true;
+      // Reset the guard after 5 s so repeated connect events don't stack
+      setTimeout(() => { btPlayedRef.current = false; }, 5000);
+
+      try {
+        const s = stateRef.current;
+        if (s.currentTrack && soundRef.current) {
+          // Audio is already loaded – just resume
+          if (!s.isPlaying) {
+            await soundRef.current.playAsync();
+            dispatch({ type: 'SET_PLAYING', payload: true });
+            persistState({ ...s, isPlaying: true });
+          }
+        } else {
+          // No active audio – try to restore from storage and play
+          const raw = await AsyncStorage.getItem(PLAYBACK_STATE_KEY);
+          if (raw) {
+            const saved = JSON.parse(raw);
+            if (saved?.track) {
+              await loadAndPlay(
+                saved.track,
+                saved.queue || [saved.track],
+                saved.currentIndex || 0,
+                saved.position || 0
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Bluetooth auto-resume error:', err);
+      }
+    };
+
+    // Android: Use the RNBluetoothStateModule event emitter if available,
+    // otherwise fall back to the DeviceEventEmitter shim exposed by our
+    // custom BluetoothReceiver (see android/BluetoothResumeModule.kt).
+    if (Platform.OS === 'android') {
+      try {
+        const { RNBluetoothStateModule } = NativeModules;
+        if (RNBluetoothStateModule) {
+          const emitter = new NativeEventEmitter(RNBluetoothStateModule);
+          btSubscription = emitter.addListener('bluetoothAudioConnected', handleBluetoothConnected);
+        } else {
+          // Fallback: listen on the global DeviceEventEmitter for the event
+          // emitted by our custom BluetoothResumeModule
+          const { DeviceEventEmitter } = require('react-native');
+          btSubscription = DeviceEventEmitter.addListener('bluetoothAudioConnected', handleBluetoothConnected);
+        }
+      } catch {
+        // Native module unavailable — skip
+      }
+    }
+
+    // iOS: AVAudioSession route-change notification is forwarded to JS via
+    // a custom NativeEventEmitter.  Works on real devices, not simulators.
+    if (Platform.OS === 'ios') {
+      try {
+        const { AudioSessionModule } = NativeModules;
+        if (AudioSessionModule) {
+          const emitter = new NativeEventEmitter(AudioSessionModule);
+          btSubscription = emitter.addListener('bluetoothAudioConnected', handleBluetoothConnected);
+        }
+      } catch {
+        // Native module unavailable — skip
+      }
+    }
+
+    return () => {
+      btSubscription?.remove?.();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Audio Setup ────────────────────────────────────────────────────────────
 
@@ -586,7 +690,10 @@ export function PlayerProvider({ children }) {
       try { await soundRef.current.unloadAsync?.(); } catch {}
       soundRef.current = null;
     }
-    await AsyncStorage.removeItem(PLAYBACK_STATE_KEY).catch(() => {});
+    // Persist the current track info so Bluetooth auto-resume still works after
+    // the user explicitly closes the player UI (we only wipe the sound object,
+    // not the saved track metadata).
+    await persistState(stateRef.current);
     dispatch({ type: 'SET_TRACK', payload: { track: null, index: 0 } });
     dispatch({ type: 'SET_PLAYING', payload: false });
     dispatch({ type: 'HIDE_PLAYER' });
