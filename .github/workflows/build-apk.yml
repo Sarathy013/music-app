@@ -97,14 +97,17 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
         with:
-          tag_name: v2.1.0-apk-${{ github.run_number }}
-          name: "VibeStream v2.1.0 Standalone APK (build ${{ github.run_number }})"
+          tag_name: v2.2.0-apk-${{ github.run_number }}
+          name: "VibeStream v2.2.0 Standalone APK (build ${{ github.run_number }})"
           make_latest: true
           body: |
-            ### 🎵 VibeStream Standalone Android APK (v2.1.0)
+            ### 🎵 VibeStream Standalone Android APK (v2.2.0)
             
             Download and install `VibeStream.apk` directly on any Android phone (no Expo Go needed)!
             
+            - **Resume Last Played Song**: App automatically resumes playback from exactly where you left off when reopened
+            - **Bluetooth Auto-Resume**: Connects Bluetooth headphones/speakers and instantly starts playing the last track
+            - **Playback State Persistence**: Track, queue, position, shuffle & repeat saved every 3 seconds
             - **New Minimalist Logo**: High-contrast soundwave branding across all icons, mipmaps, and splash screen
             - **Zero Duplicate Songs**: Advanced token-based deduplication across all screens, languages, and queues
             - **All Languages Supported**: Tamil, Telugu, Hindi, English, Malayalam, Punjabi, and Kannada
